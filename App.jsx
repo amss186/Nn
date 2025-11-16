@@ -5,12 +5,14 @@
  * @format
  */
 
-import { NewAppScreen } from '@react-native/new-app-screen';
+import React, { useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import useWalletStore from './src/store/walletStore';
+import OnboardingScreen from './src/components/OnboardingScreen';
+import BackupScreen from './src/components/BackupScreen';
+import LockedScreen from './src/components/LockedScreen';
+import DashboardScreen from './src/components/DashboardScreen';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -24,14 +26,41 @@ function App() {
 }
 
 function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+  const [showBackup, setShowBackup] = useState(false);
+  const [mnemonic, setMnemonic] = useState(null);
+  
+  const isWalletCreated = useWalletStore((state) => state.isWalletCreated);
+  const isWalletUnlocked = useWalletStore((state) => state.isWalletUnlocked);
+  const checkStorage = useWalletStore((state) => state.actions.checkStorage);
+
+  useEffect(() => {
+    checkStorage();
+  }, [checkStorage]);
+
+  const handleWalletCreated = (mnemonicPhrase) => {
+    setMnemonic(mnemonicPhrase);
+    setShowBackup(true);
+  };
+
+  const handleBackupContinue = () => {
+    setShowBackup(false);
+    setMnemonic(null);
+  };
+
+  let screen;
+  if (!isWalletCreated) {
+    screen = <OnboardingScreen onWalletCreated={handleWalletCreated} />;
+  } else if (showBackup && mnemonic) {
+    screen = <BackupScreen mnemonic={mnemonic} onContinue={handleBackupContinue} />;
+  } else if (!isWalletUnlocked) {
+    screen = <LockedScreen />;
+  } else {
+    screen = <DashboardScreen />;
+  }
 
   return (
     <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.jsx"
-        safeAreaInsets={safeAreaInsets}
-      />
+      {screen}
     </View>
   );
 }

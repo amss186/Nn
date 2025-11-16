@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import { ethers } from 'ethers';
 import * as Keychain from 'react-native-keychain';
 
-const useWalletStore = create((set) => ({
+const useWalletStore = create((set, get) => ({
   // État initial du store
   mnemonic: null,
   address: null,
   isWalletCreated: false,
   isWalletUnlocked: false,
+  balance: '0',
 
   // Actions
   actions: {
@@ -69,6 +70,7 @@ const useWalletStore = create((set) => ({
         mnemonic: null,
         address: null,
         isWalletUnlocked: false,
+        balance: '0',
       });
     },
 
@@ -80,7 +82,25 @@ const useWalletStore = create((set) => ({
         address: null,
         isWalletCreated: false,
         isWalletUnlocked: false,
+        balance: '0',
       });
+    },
+
+    // Récupère le solde du portefeuille
+    fetchBalance: async () => {
+      try {
+        const provider = new ethers.JsonRpcProvider('https://rpc.sepolia.org');
+        const { address } = get();
+        
+        if (address) {
+          const balanceWei = await provider.getBalance(address);
+          const balanceEth = ethers.formatEther(balanceWei);
+          set({ balance: balanceEth });
+        }
+      } catch (error) {
+        console.log('Failed to fetch balance:', error);
+        set({ balance: '0' });
+      }
     },
   },
 }));

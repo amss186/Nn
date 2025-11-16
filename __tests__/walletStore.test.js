@@ -34,6 +34,7 @@ describe('WalletStore', () => {
       address: null,
       isWalletCreated: false,
       isWalletUnlocked: false,
+      balance: '0',
     });
     
     // Clear all mocks
@@ -48,6 +49,7 @@ describe('WalletStore', () => {
       expect(store.address).toBeNull();
       expect(store.isWalletCreated).toBe(false);
       expect(store.isWalletUnlocked).toBe(false);
+      expect(store.balance).toBe('0');
     });
 
     it('should have actions object', () => {
@@ -59,6 +61,7 @@ describe('WalletStore', () => {
       expect(typeof store.actions.unlockWallet).toBe('function');
       expect(typeof store.actions.lockWallet).toBe('function');
       expect(typeof store.actions.wipeWallet).toBe('function');
+      expect(typeof store.actions.fetchBalance).toBe('function');
     });
   });
 
@@ -190,6 +193,7 @@ describe('WalletStore', () => {
         mnemonic: 'test mnemonic',
         address: '0x123',
         isWalletUnlocked: true,
+        balance: '1.5',
       });
 
       // Then lock the wallet
@@ -199,6 +203,7 @@ describe('WalletStore', () => {
       expect(store.mnemonic).toBeNull();
       expect(store.address).toBeNull();
       expect(store.isWalletUnlocked).toBe(false);
+      expect(store.balance).toBe('0');
     });
   });
 
@@ -212,6 +217,7 @@ describe('WalletStore', () => {
         address: '0x123',
         isWalletCreated: true,
         isWalletUnlocked: true,
+        balance: '1.5',
       });
 
       // Then wipe the wallet
@@ -223,6 +229,29 @@ describe('WalletStore', () => {
       expect(store.address).toBeNull();
       expect(store.isWalletCreated).toBe(false);
       expect(store.isWalletUnlocked).toBe(false);
+      expect(store.balance).toBe('0');
+    });
+  });
+
+  describe('fetchBalance', () => {
+    it('should handle when no address is available', async () => {
+      useWalletStore.setState({ address: null });
+
+      await useWalletStore.getState().actions.fetchBalance();
+      store = useWalletStore.getState();
+
+      expect(store.balance).toBe('0');
+    });
+
+    it('should handle fetch balance errors', async () => {
+      useWalletStore.setState({ address: '0x123' });
+      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+
+      await useWalletStore.getState().actions.fetchBalance();
+      store = useWalletStore.getState();
+
+      expect(store.balance).toBe('0');
+      consoleSpy.mockRestore();
     });
   });
 });
