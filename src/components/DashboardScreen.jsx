@@ -1,24 +1,30 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking } from 'react-native';
-import useWalletStore from '../store/walletStore';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Modal } from 'react-native';
+import useWalletStore, { SUPPORTED_NETWORKS } from '../store/walletStore';
 
 function DashboardScreen() {
   const address = useWalletStore((state) => state.address);
   const balance = useWalletStore((state) => state.balance);
   const transactions = useWalletStore((state) => state.transactions);
   const tokenBalances = useWalletStore((state) => state.tokenBalances);
+  const currentNetwork = useWalletStore((state) => state.currentNetwork);
   const lockWallet = useWalletStore((state) => state.actions.lockWallet);
   const wipeWallet = useWalletStore((state) => state.actions.wipeWallet);
   const fetchData = useWalletStore((state) => state.actions.fetchData);
   const setScreen = useWalletStore((state) => state.actions.setScreen);
+  const switchNetwork = useWalletStore((state) => state.actions.switchNetwork);
+
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (address) {
+      fetchData();
+    }
+  }, [address, currentNetwork, fetchData]);
 
   // Créer une liste d'actifs unifiée
   const assets = [
-    { symbol: 'ETH', balance: balance, logo: null, contractAddress: null, decimals: 18 }, // L'ETH en premier
+    { symbol: currentNetwork.symbol, balance: balance, logo: null, contractAddress: null, decimals: 18 }, // Actif natif du réseau
     ...tokenBalances
   ];
 
@@ -44,6 +50,48 @@ function DashboardScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Mon Portefeuille</Text>
 
+      <TouchableOpacity 
+        style={styles.networkSelector}
+        onPress={() => setModalVisible(true)}>
+        <Text style={styles.networkLabel}>Réseau actif :</Text>
+        <Text style={styles.networkName}>{currentNetwork.name}</Text>
+      </TouchableOpacity>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sélectionner un réseau</Text>
+            <FlatList
+              data={SUPPORTED_NETWORKS}
+              keyExtractor={(item) => item.chainId.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.networkItem,
+                    item.chainId === currentNetwork.chainId && styles.networkItemSelected
+                  ]}
+                  onPress={() => {
+                    switchNetwork(item);
+                    setModalVisible(false);
+                  }}>
+                  <Text style={styles.networkItemName}>{item.name}</Text>
+                  <Text style={styles.networkItemSymbol}>{item.symbol}</Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalCloseText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.infoBox}>
         <Text style={styles.label}>Adresse :</Text>
         <Text style={styles.address} numberOfLines={1} ellipsizeMode="middle">
@@ -51,7 +99,7 @@ function DashboardScreen() {
         </Text>
 
         <Text style={styles.label}>Solde total :</Text>
-        <Text style={styles.balance}>{balance} ETH</Text>
+        <Text style={styles.balance}>{balance} {currentNetwork.symbol}</Text>
       </View>
 
       <Text style={styles.sectionTitle}>Mes Actifs</Text>
@@ -105,7 +153,7 @@ function DashboardScreen() {
           return (
             <TouchableOpacity
               style={styles.transactionItem}
-              onPress={() => Linking.openURL(`https://sepolia.etherscan.io/tx/${item.hash}`)}>
+              onPress={() => Linking.openURL(`${currentNetwork.explorerUrl}/tx/${item.hash}`)}>
               <View style={styles.transactionRow}>
                 <Text style={styles.transactionAmount}>
                   {item.value} {item.asset}
@@ -141,9 +189,83 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 30,
+    marginBottom: 20,
     color: '#333',
     textAlign: 'center',
+  },
+  networkSelector: {
+    backgroundColor: '#E8F4FD',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  networkLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 5,
+  },
+  networkName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007AFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    width: '85%',
+    maxHeight: '60%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#333',
+  },
+  networkItem: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  networkItemSelected: {
+    backgroundColor: '#E8F4FD',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  networkItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  networkItemSymbol: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: 'bold',
+  },
+  modalCloseButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    padding: 15,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   infoBox: {
     backgroundColor: '#F5F5F5',
