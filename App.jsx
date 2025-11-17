@@ -15,6 +15,7 @@ import BackupVerifyScreen from './src/components/BackupVerifyScreen';
 import LockedScreen from './src/components/LockedScreen';
 import DashboardScreen from './src/components/DashboardScreen';
 import SendScreen from './src/components/SendScreen';
+import ReceiveScreen from './src/components/ReceiveScreen';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
@@ -53,6 +54,8 @@ function AppContent() {
     // Wallet is unlocked, show screen based on currentScreen state
     if (currentScreen === 'send') {
       screen = <SendScreen />;
+    } else if (currentScreen === 'receive') {
+      screen = <ReceiveScreen />;
     } else {
       screen = <DashboardScreen />;
     }
