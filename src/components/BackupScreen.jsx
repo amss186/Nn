@@ -6,9 +6,16 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import useWalletStore from '../store/walletStore';
 
-function BackupScreen({ mnemonic, onContinue }) {
+function BackupScreen() {
   const [isChecked, setIsChecked] = useState(false);
+  const mnemonic = useWalletStore((state) => state.mnemonic);
+  const setScreen = useWalletStore((state) => state.actions.setScreen);
+
+  const handleContinue = () => {
+    setScreen('backupVerify');
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -42,9 +49,9 @@ function BackupScreen({ mnemonic, onContinue }) {
 
       <TouchableOpacity
         style={[styles.button, !isChecked && styles.buttonDisabled]}
-        onPress={onContinue}
+        onPress={handleContinue}
         disabled={!isChecked}>
-        <Text style={styles.buttonText}>Continuer</Text>
+        <Text style={styles.buttonText}>Continuer vers la vérification</Text>
       </TouchableOpacity>
     </ScrollView>
   );

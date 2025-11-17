@@ -8,6 +8,7 @@ const useWalletStore = create((set, get) => ({
   address: null,
   isWalletCreated: false,
   isWalletUnlocked: false,
+  needsBackup: false,
   balance: '0',
   currentScreen: 'dashboard',
   isSending: false,
@@ -38,10 +39,20 @@ const useWalletStore = create((set, get) => ({
         mnemonic: phrase,
         address: wallet.address,
         isWalletCreated: true,
-        isWalletUnlocked: true,
+        isWalletUnlocked: false,
+        needsBackup: true,
       });
 
       return phrase;
+    },
+
+    // Vérifie la sauvegarde et déverrouille le portefeuille
+    verifyBackup: () => {
+      set({
+        needsBackup: false,
+        isWalletUnlocked: true,
+        currentScreen: 'dashboard',
+      });
     },
 
     // Déverrouille le portefeuille avec authentification biométrique

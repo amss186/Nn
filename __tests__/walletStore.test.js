@@ -34,6 +34,7 @@ describe('WalletStore', () => {
       address: null,
       isWalletCreated: false,
       isWalletUnlocked: false,
+      needsBackup: false,
       balance: '0',
     });
     
@@ -49,6 +50,7 @@ describe('WalletStore', () => {
       expect(store.address).toBeNull();
       expect(store.isWalletCreated).toBe(false);
       expect(store.isWalletUnlocked).toBe(false);
+      expect(store.needsBackup).toBe(false);
       expect(store.balance).toBe('0');
     });
 
@@ -58,6 +60,7 @@ describe('WalletStore', () => {
       expect(store.actions).toBeDefined();
       expect(typeof store.actions.checkStorage).toBe('function');
       expect(typeof store.actions.createWallet).toBe('function');
+      expect(typeof store.actions.verifyBackup).toBe('function');
       expect(typeof store.actions.unlockWallet).toBe('function');
       expect(typeof store.actions.lockWallet).toBe('function');
       expect(typeof store.actions.wipeWallet).toBe('function');
@@ -126,8 +129,30 @@ describe('WalletStore', () => {
       expect(store.mnemonic).toBe(mockMnemonic);
       expect(store.address).toBe(mockAddress);
       expect(store.isWalletCreated).toBe(true);
-      expect(store.isWalletUnlocked).toBe(true);
+      expect(store.isWalletUnlocked).toBe(false);
+      expect(store.needsBackup).toBe(true);
       expect(returnedPhrase).toBe(mockMnemonic);
+    });
+  });
+
+  describe('verifyBackup', () => {
+    it('should verify backup and unlock wallet', () => {
+      // First set up state as if wallet was just created
+      useWalletStore.setState({
+        mnemonic: 'test mnemonic',
+        address: '0x123',
+        isWalletCreated: true,
+        isWalletUnlocked: false,
+        needsBackup: true,
+      });
+
+      // Call verifyBackup
+      useWalletStore.getState().actions.verifyBackup();
+      store = useWalletStore.getState();
+
+      expect(store.needsBackup).toBe(false);
+      expect(store.isWalletUnlocked).toBe(true);
+      expect(store.currentScreen).toBe('dashboard');
     });
   });
 
