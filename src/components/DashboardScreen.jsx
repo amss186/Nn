@@ -50,6 +50,10 @@ function DashboardScreen() {
         <Text style={styles.buttonText}>Envoyer</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity style={styles.button} onPress={() => setScreen('receive')}>
+        <Text style={styles.buttonText}>Recevoir</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity style={styles.button} onPress={lockWallet}>
         <Text style={styles.buttonText}>Verrouiller</Text>
       </TouchableOpacity>
