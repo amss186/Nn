@@ -5,12 +5,13 @@
  * @format
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import useWalletStore from './src/store/walletStore';
 import OnboardingScreen from './src/components/OnboardingScreen';
 import BackupScreen from './src/components/BackupScreen';
+import BackupVerifyScreen from './src/components/BackupVerifyScreen';
 import LockedScreen from './src/components/LockedScreen';
 import DashboardScreen from './src/components/DashboardScreen';
 import SendScreen from './src/components/SendScreen';
@@ -27,11 +28,9 @@ function App() {
 }
 
 function AppContent() {
-  const [showBackup, setShowBackup] = useState(false);
-  const [mnemonic, setMnemonic] = useState(null);
-  
   const isWalletCreated = useWalletStore((state) => state.isWalletCreated);
   const isWalletUnlocked = useWalletStore((state) => state.isWalletUnlocked);
+  const needsBackup = useWalletStore((state) => state.needsBackup);
   const currentScreen = useWalletStore((state) => state.currentScreen);
   const checkStorage = useWalletStore((state) => state.actions.checkStorage);
 
@@ -39,21 +38,15 @@ function AppContent() {
     checkStorage();
   }, [checkStorage]);
 
-  const handleWalletCreated = (mnemonicPhrase) => {
-    setMnemonic(mnemonicPhrase);
-    setShowBackup(true);
-  };
-
-  const handleBackupContinue = () => {
-    setShowBackup(false);
-    setMnemonic(null);
-  };
-
   let screen;
   if (!isWalletCreated) {
-    screen = <OnboardingScreen onWalletCreated={handleWalletCreated} />;
-  } else if (showBackup && mnemonic) {
-    screen = <BackupScreen mnemonic={mnemonic} onContinue={handleBackupContinue} />;
+    screen = <OnboardingScreen />;
+  } else if (needsBackup) {
+    if (currentScreen === 'backupVerify') {
+      screen = <BackupVerifyScreen />;
+    } else {
+      screen = <BackupScreen />;
+    }
   } else if (!isWalletUnlocked) {
     screen = <LockedScreen />;
   } else {

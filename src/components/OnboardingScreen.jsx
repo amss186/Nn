@@ -2,14 +2,11 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import useWalletStore from '../store/walletStore';
 
-function OnboardingScreen({ onWalletCreated }) {
+function OnboardingScreen() {
   const createWallet = useWalletStore((state) => state.actions.createWallet);
 
   const handleCreateWallet = async () => {
-    const mnemonic = await createWallet();
-    if (onWalletCreated) {
-      onWalletCreated(mnemonic);
-    }
+    await createWallet();
   };
 
   return (
