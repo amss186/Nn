@@ -133,6 +133,44 @@ const useWalletStore = create((set, get) => ({
       return phrase;
     },
 
+    // Importe un portefeuille existant depuis une mnemonic
+    importWalletFromMnemonic: async (mnemonic, passwordForLocalEncryption = null) => {
+      try {
+        // Valide la mnemonic en créant un wallet
+        const wallet = ethers.Wallet.fromPhrase(mnemonic);
+        const address = wallet.address;
+
+        if (Platform.OS === 'web') {
+          // DEMO ONLY - NOT SECURE
+          // TODO: Replace with proper secure storage in production
+          const demoPassword = passwordForLocalEncryption || 'demo1234';
+          webStorage.setItem('wallet_mnemonic', mnemonic);
+          webStorage.setItem('wallet_password', demoPassword);
+          
+          // Mark backup as not needed since wallet was imported
+          localStorage.setItem('wallet_needsBackup', 'false');
+        } else {
+          // On native, use Keychain
+          await Keychain.setGenericPassword('wallet', mnemonic, {
+            accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_ANY_OR_DEVICE_PASSCODE,
+          });
+        }
+
+        set({
+          mnemonic: mnemonic,
+          address: address,
+          isWalletCreated: true,
+          isWalletUnlocked: true,
+          needsBackup: false, // Imported wallets don't need backup flow
+        });
+
+        return address;
+      } catch (error) {
+        console.log('importWalletFromMnemonic error:', error);
+        throw new Error('Mnemonic invalide');
+      }
+    },
+
     // Vérifie la sauvegarde et déverrouille le portefeuille
     verifyBackup: () => {
       // On web, persist backup completion
