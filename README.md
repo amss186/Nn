@@ -8,6 +8,8 @@ A Web3 wallet application for Ethereum testnets with a MetaMask-inspired dark th
 
 - 🦊 MetaMask-style dark theme UI
 - 🔐 Password-based authentication for web (demo mode)
+- 📥 **Wallet import from mnemonic (12/24 words)**
+- 🔥 **Firebase integration**: Wallet address linked to user account
 - 💸 Send and receive ETH on Ethereum Sepolia testnet
 - 🔄 Demo swap functionality
 - 🪙 Token balance viewing
@@ -41,13 +43,21 @@ The web app will be available at `http://localhost:8080` in development mode.
    - Set a password (minimum 4 characters) - DEMO ONLY, NOT SECURE
    - Note: Password is stored in localStorage (not secure for production)
 
-2. **Backup Phrase**
+2. **Import Wallet (NEW)**
+   - Navigate to https://pulseailab.me
+   - Click "Importer un portefeuille existant"
+   - Enter your 12 or 24-word recovery phrase
+   - Set a password for local encryption (web demo only)
+   - The wallet is imported and ready to use
+   - **Security**: Your mnemonic is NEVER sent to the server. Only the wallet address is stored in Firestore if you're signed in with Firebase.
+
+3. **Backup Phrase**
    - Write down your 12-word recovery phrase
    - Store it securely - this is the ONLY way to recover your wallet
    - Check the confirmation box
    - Verify 3 random words from your phrase
 
-3. **Dashboard**
+4. **Dashboard**
    - View your balance (testnet ETH)
    - See network status (Ethereum Sepolia - Testnet)
    - Access four main actions:
@@ -56,35 +66,80 @@ The web app will be available at `http://localhost:8080` in development mode.
      - 📤 Envoyer (Send)
      - 📥 Recevoir (Receive)
 
-4. **Receive ETH**
+5. **Receive ETH**
    - Click "Recevoir"
    - Copy your wallet address
    - Get testnet ETH from Sepolia faucet: https://sepoliafaucet.com/
    - Wait for transaction confirmation
 
-5. **Send ETH**
+6. **Send ETH**
    - Click "Envoyer"
    - Enter recipient address
    - Enter amount
    - Confirm transaction
    - Transaction will appear on Sepolia Etherscan
 
-6. **Demo Swap**
+7. **Demo Swap**
    - Click "Échanger"
    - Enter amount to swap
    - This performs a real testnet transaction to your own address
    - Useful for testing transaction flows
 
-7. **Settings**
+8. **Settings**
    - Click menu icon (☰) in top left
    - View recovery phrase (with warning)
    - Lock wallet
    - Delete wallet (with confirmation)
 
-8. **Lock/Unlock**
+9. **Lock/Unlock**
    - Lock wallet from Settings
    - Enter password to unlock
    - On native apps, uses biometric authentication
+
+## Wallet Import & Firebase Integration
+
+### How it Works
+
+This wallet implements a secure wallet import flow with Firebase integration:
+
+1. **Local Storage Only**: 
+   - Your mnemonic (recovery phrase) is stored ONLY on your device
+   - Web: Encrypted with password in localStorage (demo only)
+   - Native: Secured with device Keychain/SecureStore
+
+2. **Firestore Integration**:
+   - Only your wallet ADDRESS (public) is stored in Firestore
+   - Stored under `users/{uid}/walletAddress`
+   - The mnemonic is NEVER sent to Firebase or any server
+
+3. **Import Process**:
+   - Enter your 12 or 24-word recovery phrase
+   - Set a password for local encryption (web only)
+   - Wallet is validated using ethers.js
+   - Mnemonic is encrypted and stored locally
+   - If signed in with Firebase, the address is linked to your account
+
+### Testing Wallet Import
+
+To test the import functionality:
+
+```bash
+# 1. Create a test wallet first to get a mnemonic
+# 2. Copy the mnemonic from the backup screen
+# 3. Delete the wallet from settings
+# 4. Use "Importer un portefeuille existant" to restore it
+```
+
+### Firebase Firestore Structure
+
+```
+users/
+  {uid}/
+    walletAddress: "0x..."
+    updatedAt: "2025-11-19T..."
+```
+
+**Note**: The mnemonic is NEVER stored in Firestore for security reasons.
 
 ### Security Warnings
 
@@ -95,6 +150,13 @@ For production deployments:
 - Implement proper encryption
 - Never store private keys in localStorage
 - Use only on testnets
+
+**Wallet Import Security**:
+- 🔒 Your mnemonic is NEVER sent to any server
+- 🔒 Only the public wallet address is stored in Firestore
+- 🔒 Mnemonic is encrypted locally on your device
+- ⚠️ Web demo: Uses localStorage (not production-ready)
+- ✅ Native apps: Uses platform Keychain/SecureStore
 
 ### Network Configuration
 
