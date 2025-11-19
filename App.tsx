@@ -10,6 +10,9 @@ import BackupVerifyScreen from './src/components/BackupVerifyScreen.jsx';
 import LockedScreen from './src/components/LockedScreen.jsx';
 import DashboardScreen from './src/components/DashboardScreen.jsx';
 import SendScreen from './src/components/SendScreen.jsx';
+import ReceiveScreen from './src/components/ReceiveScreen.jsx';
+import SwapScreen from './src/components/SwapScreen.jsx';
+import SettingsScreen from './src/components/SettingsScreen.jsx';
 
 import useWalletStore from './src/store/walletStore';
 
@@ -40,6 +43,9 @@ export default function App() {
             <>
               <Stack.Screen name="Dashboard" component={DashboardScreen} />
               <Stack.Screen name="Send" component={SendScreen} />
+              <Stack.Screen name="Receive" component={ReceiveScreen} />
+              <Stack.Screen name="Swap" component={SwapScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
             </>
           )}
         </Stack.Navigator>
