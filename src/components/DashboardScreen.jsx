@@ -101,6 +101,14 @@ function DashboardScreen() {
     }
   };
 
+  const handleBuy = () => {
+    Alert.alert('Acheter', 'Fonctionnalité à venir : achat de crypto avec carte bancaire.');
+  };
+
+  const handleSell = () => {
+    Alert.alert('Vendre', 'Fonctionnalité à venir : vente de crypto vers compte bancaire.');
+  };
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Mon Portefeuille</Text>
@@ -187,9 +195,26 @@ function DashboardScreen() {
         style={styles.assetsList}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleReceive}>
-        <Text style={styles.buttonText}>Recevoir</Text>
-      </TouchableOpacity>
+      <Text style={styles.sectionTitle}>Actions</Text>
+
+      <View style={styles.actionsRow}>
+        <TouchableOpacity style={[styles.actionButton, styles.primaryAction]} onPress={handleReceive}>
+          <Text style={styles.actionIcon}>📥</Text>
+          <Text style={styles.actionButtonText}>Recevoir</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.actionButton, styles.primaryAction]} onPress={handleBuy}>
+          <Text style={styles.actionIcon}>💳</Text>
+          <Text style={styles.actionButtonText}>Acheter</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.actionsRow}>
+        <TouchableOpacity style={[styles.actionButton, styles.disabledAction]} onPress={handleSell}>
+          <Text style={styles.actionIcon}>💰</Text>
+          <Text style={styles.actionButtonText}>Vendre</Text>
+        </TouchableOpacity>
+      </View>
 
       {Platform.OS !== 'web' && (
         <TouchableOpacity style={styles.button} onPress={lockWallet}>
@@ -425,6 +450,35 @@ const styles = StyleSheet.create({
   assetBalance: {
     fontSize: 16,
     color: '#007AFF',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginHorizontal: 5,
+    flexDirection: 'column',
+  },
+  primaryAction: {
+    backgroundColor: '#007AFF',
+  },
+  disabledAction: {
+    backgroundColor: '#B0BEC5',
+  },
+  actionIcon: {
+    fontSize: 24,
+    marginBottom: 5,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   transactionItem: {
     backgroundColor: '#F5F5F5',
