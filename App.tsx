@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider } from 'react-native-paper';
+import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 
 import OnboardingScreen from './src/components/OnboardingScreen.jsx';
@@ -13,8 +14,12 @@ import SendScreen from './src/components/SendScreen.jsx';
 import ReceiveScreen from './src/components/ReceiveScreen.jsx';
 import ScanScreen from './src/screens/ScanScreen';
 import WalletConnectModal from './src/components/WalletConnectModal';
+import AuthScreen from './src/screens/AuthScreen';
 
 import useWalletStore from './src/store/walletStore';
+import { observeAuthState, AuthUser } from './src/services/authService';
+// Import firebaseConfig to ensure Firebase is initialized
+import './src/firebaseConfig';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,15 +29,43 @@ export default function App() {
   const needsBackup = useWalletStore((state) => state.needsBackup);
   const checkStorage = useWalletStore((state) => state.actions.checkStorage);
 
+  // Firebase auth state (only on web)
+  const [firebaseUser, setFirebaseUser] = useState<AuthUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   useEffect(() => {
     checkStorage();
   }, [checkStorage]);
+
+  // Observe Firebase auth state on web only
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const unsubscribe = observeAuthState((user) => {
+        setFirebaseUser(user);
+        setAuthLoading(false);
+      });
+      return unsubscribe;
+    } else {
+      // On native, skip Firebase auth
+      setAuthLoading(false);
+    }
+  }, []);
+
+  // Show loading state while checking auth
+  if (authLoading && Platform.OS === 'web') {
+    return null;
+  }
+
+  // On web, require Firebase authentication before wallet flow
+  const needsAuth = Platform.OS === 'web' && (!firebaseUser || !firebaseUser.emailVerified);
 
   return (
     <PaperProvider>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {!isWalletCreated ? (
+          {needsAuth ? (
+            <Stack.Screen name="Auth" component={AuthScreen} />
+          ) : !isWalletCreated ? (
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           ) : needsBackup ? (
             <>
