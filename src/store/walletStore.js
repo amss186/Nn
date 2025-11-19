@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { ethers } from 'ethers';
 import * as Keychain from 'react-native-keychain';
 import { Alchemy } from 'alchemy-sdk';
+import { Platform } from 'react-native';
 
 const SUPPORTED_NETWORKS = [
   { 
@@ -44,7 +45,23 @@ const useWalletStore = create((set, get) => ({
     checkStorage: async () => {
       try {
         const credentials = await Keychain.getGenericPassword();
-        set({ isWalletCreated: !!credentials });
+        const walletExists = !!credentials;
+        set({ isWalletCreated: walletExists });
+        
+        // On web, auto-unlock if wallet exists and not in backup mode
+        if (Platform.OS === 'web' && walletExists && credentials) {
+          const wallet = ethers.Wallet.fromPhrase(credentials.password);
+          const state = get();
+          
+          // Only auto-unlock if backup is already completed
+          if (!state.needsBackup) {
+            set({
+              mnemonic: credentials.password,
+              address: wallet.address,
+              isWalletUnlocked: true,
+            });
+          }
+        }
       } catch (error) {
         set({ isWalletCreated: false });
       }
@@ -82,6 +99,21 @@ const useWalletStore = create((set, get) => ({
     // Déverrouille le portefeuille avec authentification biométrique
     unlockWallet: async () => {
       try {
+        // On web, check if wallet exists in localStorage and auto-unlock
+        if (Platform.OS === 'web') {
+          const credentials = await Keychain.getGenericPassword();
+          if (credentials) {
+            const wallet = ethers.Wallet.fromPhrase(credentials.password);
+            set({
+              mnemonic: credentials.password,
+              address: wallet.address,
+              isWalletUnlocked: true,
+            });
+            return;
+          }
+        }
+        
+        // On native platforms, use biometric authentication
         const credentials = await Keychain.getGenericPassword({
           authenticationPrompt: {
             title: "Déverrouiller le portefeuille",

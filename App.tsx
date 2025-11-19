@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -10,6 +10,7 @@ import BackupVerifyScreen from './src/components/BackupVerifyScreen.jsx';
 import LockedScreen from './src/components/LockedScreen.jsx';
 import DashboardScreen from './src/components/DashboardScreen.jsx';
 import SendScreen from './src/components/SendScreen.jsx';
+import ReceiveScreen from './src/components/ReceiveScreen.jsx';
 
 import useWalletStore from './src/store/walletStore';
 
@@ -19,6 +20,11 @@ export default function App() {
   const isWalletCreated = useWalletStore((state) => state.isWalletCreated);
   const isWalletUnlocked = useWalletStore((state) => state.isWalletUnlocked);
   const needsBackup = useWalletStore((state) => state.needsBackup);
+  const checkStorage = useWalletStore((state) => state.actions.checkStorage);
+
+  useEffect(() => {
+    checkStorage();
+  }, [checkStorage]);
 
   return (
     <PaperProvider>
@@ -40,6 +46,7 @@ export default function App() {
             <>
               <Stack.Screen name="Dashboard" component={DashboardScreen} />
               <Stack.Screen name="Send" component={SendScreen} />
+              <Stack.Screen name="Receive" component={ReceiveScreen} />
             </>
           )}
         </Stack.Navigator>
