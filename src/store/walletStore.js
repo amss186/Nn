@@ -49,21 +49,29 @@ const useWalletStore = create((set, get) => ({
       try {
         const credentials = await Keychain.getGenericPassword();
         const walletExists = !!credentials;
-        set({ isWalletCreated: walletExists });
         
-        // On web, auto-unlock if wallet exists and not in backup mode
-        if (Platform.OS === 'web' && walletExists && credentials) {
-          const wallet = ethers.Wallet.fromPhrase(credentials.password);
-          const state = get();
+        // On web, check for additional persisted state
+        if (Platform.OS === 'web') {
+          // Load persisted backup status
+          const needsBackupStored = localStorage.getItem('wallet_needsBackup');
+          const needsBackup = needsBackupStored === 'true';
           
-          // Only auto-unlock if backup is already completed
-          if (!state.needsBackup) {
+          set({ 
+            isWalletCreated: walletExists,
+            needsBackup: needsBackup 
+          });
+          
+          // Auto-unlock if wallet exists and backup is completed
+          if (walletExists && credentials && !needsBackup) {
+            const wallet = ethers.Wallet.fromPhrase(credentials.password);
             set({
               mnemonic: credentials.password,
               address: wallet.address,
               isWalletUnlocked: true,
             });
           }
+        } else {
+          set({ isWalletCreated: walletExists });
         }
       } catch (error) {
         set({ isWalletCreated: false });
@@ -79,6 +87,11 @@ const useWalletStore = create((set, get) => ({
         accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_ANY_OR_DEVICE_PASSCODE,
       });
 
+      // On web, persist backup status
+      if (Platform.OS === 'web') {
+        localStorage.setItem('wallet_needsBackup', 'true');
+      }
+
       set({
         mnemonic: phrase,
         address: wallet.address,
@@ -92,6 +105,11 @@ const useWalletStore = create((set, get) => ({
 
     // Vérifie la sauvegarde et déverrouille le portefeuille
     verifyBackup: () => {
+      // On web, persist backup completion
+      if (Platform.OS === 'web') {
+        localStorage.setItem('wallet_needsBackup', 'false');
+      }
+      
       set({
         needsBackup: false,
         isWalletUnlocked: true,
@@ -150,6 +168,12 @@ const useWalletStore = create((set, get) => ({
     // Efface complètement le portefeuille
     wipeWallet: async () => {
       await Keychain.resetGenericPassword();
+      
+      // On web, clear all persisted data
+      if (Platform.OS === 'web') {
+        localStorage.removeItem('wallet_needsBackup');
+      }
+      
       set({
         mnemonic: null,
         address: null,
