@@ -10,19 +10,26 @@ const babelLoaderConfiguration = {
     path.resolve(appDirectory, 'src'),
     path.resolve(appDirectory, 'App.tsx'),
     path.resolve(appDirectory, 'node_modules/react-native-vector-icons'),
+    path.resolve(appDirectory, 'node_modules/react-native-paper'),
+    path.resolve(appDirectory, 'node_modules/react-native-safe-area-context'),
   ],
   use: {
     loader: 'babel-loader',
     options: {
       cacheDirectory: true,
+      // C'EST ICI LA CORRECTION MAGIQUE :
+      babelrc: false,
+      configFile: false,
+      // On définit les règles ici, proprement :
       presets: [
         ['@babel/preset-env', { targets: { browsers: ['last 2 versions'] } }],
         '@babel/preset-react',
         '@babel/preset-typescript',
-        'module:metro-react-native-babel-preset'
       ],
       plugins: [
         ['react-native-web', { commonjs: true }],
+        '@babel/plugin-proposal-export-namespace-from',
+        'react-native-reanimated/plugin',
       ],
     },
   },
