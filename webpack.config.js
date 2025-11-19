@@ -12,12 +12,12 @@ const babelLoaderConfiguration = {
     path.resolve(appDirectory, 'node_modules/react-native-vector-icons'),
     path.resolve(appDirectory, 'node_modules/react-native-paper'),
     path.resolve(appDirectory, 'node_modules/react-native-safe-area-context'),
+    path.resolve(appDirectory, 'node_modules/react-native-toast-message'),
   ],
   use: {
     loader: 'babel-loader',
     options: {
       cacheDirectory: true,
-      // On ignore les configs externes pour éviter les conflits
       babelrc: false,
       configFile: false,
       presets: [
@@ -26,8 +26,8 @@ const babelLoaderConfiguration = {
         '@babel/preset-typescript',
       ],
       plugins: [
-        // Seul plugin essentiel pour le web :
         ['react-native-web', { commonjs: true }],
+        '@babel/plugin-proposal-export-namespace-from',
       ],
     },
   },
@@ -46,6 +46,8 @@ module.exports = {
     extensions: ['.web.tsx', '.web.ts', '.tsx', '.ts', '.web.js', '.js'],
     alias: {
       'react-native$': 'react-native-web',
+      // C'EST ICI LA MAGIE : On remplace le Keychain par notre mock
+      'react-native-keychain': path.resolve(appDirectory, 'keychain.mock.js'),
     },
   },
   module: {
@@ -63,5 +65,6 @@ module.exports = {
     }),
   ],
 };
+
 
 
