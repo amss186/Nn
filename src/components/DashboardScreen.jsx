@@ -1,29 +1,33 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Modal, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  ScrollView,
+  Modal,
+  Alert,
+  Platform,
+} from 'react-native';
+import Toast from 'react-native-toast-message';
 import { useNavigation } from '@react-navigation/native';
 import useWalletStore, { SUPPORTED_NETWORKS } from '../store/walletStore';
 
 function DashboardScreen() {
+  const navigation = useNavigation();
+
   const address = useWalletStore((state) => state.address);
   const balance = useWalletStore((state) => state.balance);
-  const transactions = useWalletStore((state) => state.transactions);
   const tokenBalances = useWalletStore((state) => state.tokenBalances);
   const currentNetwork = useWalletStore((state) => state.currentNetwork);
-  const lockWallet = useWalletStore((state) => state.actions.lockWallet);
-  const wipeWallet = useWalletStore((state) => state.actions.wipeWallet);
   const fetchData = useWalletStore((state) => state.actions.fetchData);
-  const setScreen = useWalletStore((state) => state.actions.setScreen);
   const switchNetwork = useWalletStore((state) => state.actions.switchNetwork);
+  const setScreen = useWalletStore((state) => state.actions.setScreen);
+  const lockWallet = useWalletStore((state) => state.actions.lockWallet);
 
   const [modalVisible, setModalVisible] = useState(false);
-  
-  // Use React Navigation when available (web/App.tsx)
-  let navigation = null;
-  try {
-    navigation = useNavigation();
-  } catch (e) {
-    // Navigation not available (App.jsx), will use store-based navigation
-  }
+  const [activeTab, setActiveTab] = useState('tokens');
 
   useEffect(() => {
     if (address) {
@@ -31,100 +35,103 @@ function DashboardScreen() {
     }
   }, [address, currentNetwork, fetchData]);
 
-  // Créer une liste d'actifs unifiée
+  // Actifs : ETH (réseau courant) + tokens
   const assets = [
-    { symbol: currentNetwork.symbol, balance: balance, logo: null, contractAddress: null, decimals: 18 }, // Actif natif du réseau
-    ...tokenBalances
+    {
+      symbol: currentNetwork.symbol,
+      balance: balance,
+      logo: null,
+      contractAddress: null,
+      decimals: 18,
+    },
+    ...tokenBalances,
   ];
 
-  const handleWipeWallet = () => {
-    Alert.alert(
-      'Effacer le portefeuille',
-      'Êtes-vous sûr de vouloir effacer définitivement votre portefeuille ? Cette action est irréversible.',
-      [
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-        {
-          text: 'Effacer',
-          style: 'destructive',
-          onPress: wipeWallet,
-        },
-      ],
-    );
-  };
-
-  const handleReceive = () => {
-    // For store-based navigation (App.jsx)
-    setScreen('receive');
-    
-    // For React Navigation (App.tsx / web)
-    if (navigation && typeof navigation.navigate === 'function') {
-      try {
-        navigation.navigate('Receive');
-      } catch (e) {
-        console.log('Navigation to Receive failed:', e);
-      }
-    }
-  };
-
-  const handleSend = (asset) => {
-    // For store-based navigation (App.jsx)
-    setScreen('send', asset);
-    
-    // For React Navigation (App.tsx / web)
-    if (navigation && typeof navigation.navigate === 'function') {
-      try {
-        navigation.navigate('Send');
-      } catch (e) {
-        console.log('Navigation to Send failed:', e);
-      }
-    }
-  };
-
   const handleCopyAddress = async () => {
+    if (!address) return;
+
     try {
-      // Try web clipboard API first
-      if (Platform.OS === 'web' && navigator.clipboard) {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(address);
-        Alert.alert('Succès', 'Adresse copiée dans le presse-papiers');
+        Toast.show({
+          type: 'success',
+          text1: 'Adresse copiée',
+          text2: "L'adresse a été copiée dans le presse-papiers",
+        });
       } else {
-        // Fallback to React Native Clipboard (will be imported dynamically)
-        const { default: Clipboard } = await import('react-native').then(rn => ({ default: rn.Clipboard }));
+        // Fallback RN (Clipboard)
+        const { Clipboard } = await import('react-native');
         Clipboard.setString(address);
         Alert.alert('Succès', 'Adresse copiée dans le presse-papiers');
       }
     } catch (error) {
       console.log('Failed to copy address:', error);
-      Alert.alert('Erreur', 'Impossible de copier l\'adresse');
+      Alert.alert('Erreur', "Impossible de copier l'adresse");
     }
   };
 
   const handleBuy = () => {
-    Alert.alert('Acheter', 'Fonctionnalité à venir : achat de crypto avec carte bancaire.');
+    Alert.alert(
+      'Acheter',
+      'Fonctionnalité à venir : achat de crypto avec carte bancaire (testnet uniquement).'
+    );
   };
 
   const handleSell = () => {
-    Alert.alert('Vendre', 'Fonctionnalité à venir : vente de crypto vers compte bancaire.');
+    Alert.alert(
+      'Vendre',
+      'Fonctionnalité à venir : vente de crypto vers compte bancaire (testnet uniquement).'
+    );
+  };
+
+  const handleSwap = () => {
+    // store-based navigation (ancien App.jsx)
+    setScreen('swap', null);
+    // navigation stack (App.tsx / web)
+    navigation.navigate('Swap');
+  };
+
+  const handleReceive = () => {
+    setScreen('receive');
+    navigation.navigate('Receive');
+  };
+
+  const handleSend = (asset = null) => {
+    setScreen('send', asset);
+    navigation.navigate('Send');
+  };
+
+  const handleSettings = () => {
+    navigation.navigate('Settings');
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Mon Portefeuille</Text>
+      {/* Top Bar */}
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={handleSettings}>
+          <Text style={styles.menuIcon}>☰</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={styles.networkSelector}
-        onPress={() => setModalVisible(true)}>
-        <Text style={styles.networkLabel}>Réseau actif :</Text>
-        <Text style={styles.networkName}>{currentNetwork.name}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.accountBadge} onPress={handleCopyAddress}>
+          <Text style={styles.accountName}>Account 1</Text>
+          <Text style={styles.accountAddress}>
+            {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
+          </Text>
+        </TouchableOpacity>
 
+        <TouchableOpacity onPress={() => setModalVisible(true)}>
+          <Text style={styles.networkIcon}>🌐</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Sélecteur de réseau (modal) */}
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}>
+        onRequestClose={() => setModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Sélectionner un réseau</Text>
@@ -135,79 +142,119 @@ function DashboardScreen() {
                 <TouchableOpacity
                   style={[
                     styles.networkItem,
-                    item.chainId === currentNetwork.chainId && styles.networkItemSelected
+                    item.chainId === currentNetwork.chainId && styles.networkItemSelected,
                   ]}
                   onPress={() => {
                     switchNetwork(item);
                     setModalVisible(false);
-                  }}>
+                  }}
+                >
                   <Text style={styles.networkItemName}>{item.name}</Text>
                   <Text style={styles.networkItemSymbol}>{item.symbol}</Text>
                 </TouchableOpacity>
               )}
             />
             <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setModalVisible(false)}>
+              style={[styles.modalCloseButton, { marginTop: 10, padding: 12, borderRadius: 10 }]}
+              onPress={() => setModalVisible(false)}
+            >
               <Text style={styles.modalCloseText}>Fermer</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      <View style={styles.infoBox}>
-        <Text style={styles.label}>Adresse :</Text>
-        <View style={styles.addressContainer}>
-          <Text style={styles.address} selectable={true}>
-            {address}
+      <ScrollView style={styles.scrollView}>
+        {/* Badge réseau */}
+        <View style={styles.networkBadge}>
+          <Text style={styles.networkBadgeText}>{currentNetwork.name} - Testnet</Text>
+        </View>
+
+        {/* Adresse + solde simple */}
+        <View style={styles.infoBox}>
+          <Text style={styles.label}>Adresse :</Text>
+          <View style={styles.addressContainer}>
+            <Text style={styles.address} selectable>
+              {address}
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.copyButton} onPress={handleCopyAddress}>
+            <Text style={styles.copyButtonText}>📋 Copier l'adresse</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.label}>Solde total :</Text>
+          <Text style={styles.balancePlain}>
+            {balance} {currentNetwork.symbol}
           </Text>
         </View>
-        <TouchableOpacity style={styles.copyButton} onPress={handleCopyAddress}>
-          <Text style={styles.copyButtonText}>📋 Copier l'adresse</Text>
-        </TouchableOpacity>
 
-        <Text style={styles.label}>Solde total :</Text>
-        <Text style={styles.balance}>{balance} {currentNetwork.symbol}</Text>
-      </View>
+        {/* Balance principale */}
+        <View style={styles.balanceSection}>
+          <Text style={styles.balanceLabel}>Solde total</Text>
+          <Text style={styles.balanceValue}>
+            {parseFloat(balance || '0').toFixed(4)} {currentNetwork.symbol}
+          </Text>
+          <Text style={styles.balanceUSD}>≈ 0,00 $US (Testnet)</Text>
+        </View>
 
-      <Text style={styles.sectionTitle}>Mes Actifs</Text>
-
-      <FlatList
-        data={assets}
-        keyExtractor={(item) => item.contractAddress || 'ETH'}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.assetItem}
-            onPress={() => handleSend(item)}>
-            <View style={styles.assetInfo}>
-              {item.logo ? (
-                <Text style={styles.assetLogo}>🪙</Text>
-              ) : (
-                <Text style={styles.assetLogo}>💎</Text>
-              )}
-              <View style={styles.assetDetails}>
-                <Text style={styles.assetSymbol}>{item.symbol}</Text>
-                <Text style={styles.assetBalance}>{item.balance}</Text>
-              </View>
+        {/* Actions principales */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity style={styles.actionButton} onPress={handleBuy}>
+            <View style={styles.actionIcon}>
+              <Text style={styles.actionIconText}>💳</Text>
             </View>
+            <Text style={styles.actionText}>Acheter</Text>
           </TouchableOpacity>
-        )}
-        style={styles.assetsList}
-      />
 
-      <Text style={styles.sectionTitle}>Actions</Text>
+          <TouchableOpacity style={styles.actionButton} onPress={handleSwap}>
+            <View style={styles.actionIcon}>
+              <Text style={styles.actionIconText}>🔄</Text>
+            </View>
+            <Text style={styles.actionText}>Échanger</Text>
+          </TouchableOpacity>
 
-      <View style={styles.actionsRow}>
-        <TouchableOpacity style={[styles.actionButton, styles.primaryAction]} onPress={handleReceive}>
-          <Text style={styles.actionIcon}>📥</Text>
-          <Text style={styles.actionButtonText}>Recevoir</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={() => handleSend(null)}>
+            <View style={styles.actionIcon}>
+              <Text style={styles.actionIconText}>📤</Text>
+            </View>
+            <Text style={styles.actionText}>Envoyer</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, styles.primaryAction]} onPress={handleBuy}>
-          <Text style={styles.actionIcon}>💳</Text>
-          <Text style={styles.actionButtonText}>Acheter</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.actionButton} onPress={handleReceive}>
+            <View style={styles.actionIcon}>
+              <Text style={styles.actionIconText}>📥</Text>
+            </View>
+            <Text style={styles.actionText}>Recevoir</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Tabs */}
+        <View style={styles.tabs}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'tokens' && styles.tabActive]}
+            onPress={() => setActiveTab('tokens')}
+          >
+            <Text style={[styles.tabText, activeTab === 'tokens' && styles.tabTextActive]}>
+              Jetons
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'defi' && styles.tabActive]}
+            onPress={() => setActiveTab('defi')}
+          >
+            <Text style={[styles.tabText, activeTab === 'defi' && styles.tabTextActive]}>
+              DeFi
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'nft' && styles.tabActive]}
+            onPress={() => setActiveTab('nft')}
+          >
+            <Text style={[styles.tabText, activeTab === 'nft' && styles.tabTextActive]}>
+              NFT
+            </Text>
+          </TouchableOpacity>
+        </View>
 
       <View style={styles.actionsRow}>
         <TouchableOpacity style={[styles.actionButton, styles.disabledAction]} onPress={handleSell}>
@@ -229,53 +276,35 @@ function DashboardScreen() {
         </TouchableOpacity>
       </View>
 
-      {Platform.OS !== 'web' && (
-        <TouchableOpacity style={styles.button} onPress={lockWallet}>
-          <Text style={styles.buttonText}>Verrouiller</Text>
-        </TouchableOpacity>
-      )}
+        {activeTab === 'defi' && (
+          <View style={styles.placeholderContainer}>
+            <Text style={styles.placeholderEmoji}>🏦</Text>
+            <Text style={styles.placeholderTitle}>DeFi bientôt disponible</Text>
+            <Text style={styles.placeholderSubtitle}>
+              Les fonctionnalités DeFi seront disponibles prochainement.
+            </Text>
+          </View>
+        )}
 
-      <TouchableOpacity
-        style={[styles.button, styles.dangerButton]}
-        onPress={handleWipeWallet}>
-        <Text style={styles.buttonText}>Effacer Portefeuille</Text>
-      </TouchableOpacity>
+        {activeTab === 'nft' && (
+          <View style={styles.placeholderContainer}>
+            <Text style={styles.placeholderEmoji}>🖼️</Text>
+            <Text style={styles.placeholderTitle}>NFT bientôt disponibles</Text>
+            <Text style={styles.placeholderSubtitle}>
+              Vos NFT seront affichés ici prochainement.
+            </Text>
+          </View>
+        )}
 
-      <Text style={styles.sectionTitle}>Historique des transactions</Text>
-
-      <FlatList
-        data={transactions}
-        keyExtractor={(item) => item.hash}
-        renderItem={({ item }) => {
-          const isSent = item.from.toLowerCase() === address.toLowerCase();
-          const direction = isSent ? 'Envoyé' : 'Reçu';
-          
-          return (
-            <TouchableOpacity
-              style={styles.transactionItem}
-              onPress={() => Linking.openURL(`${currentNetwork.explorerUrl}/tx/${item.hash}`)}>
-              <View style={styles.transactionRow}>
-                <Text style={styles.transactionAmount}>
-                  {item.value} {item.asset}
-                </Text>
-                <Text style={styles.transactionDate}>
-                  {new Date(item.metadata.blockTimestamp).toLocaleDateString()}
-                </Text>
-              </View>
-              <Text style={styles.transactionDirection}>{direction}</Text>
-              <Text style={styles.transactionAddress} numberOfLines={1}>
-                De: {item.from.slice(0, 6)}...{item.from.slice(-4)}
-              </Text>
-              <Text style={styles.transactionAddress} numberOfLines={1}>
-                À: {item.to.slice(0, 6)}...{item.to.slice(-4)}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>Aucune transaction</Text>
-        }
-      />
+        {Platform.OS !== 'web' && (
+          <TouchableOpacity
+            style={[styles.copyButton, { backgroundColor: '#E53935', marginHorizontal: 15 }]}
+            onPress={lockWallet}
+          >
+            <Text style={styles.copyButtonText}>Verrouiller</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -283,113 +312,84 @@ function DashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#24272A',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
-    textAlign: 'center',
-  },
-  networkSelector: {
-    backgroundColor: '#E8F4FD',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  networkLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 5,
-  },
-  networkName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 20,
-    width: '85%',
-    maxHeight: '60%',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    color: '#333',
-  },
-  networkItem: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3C4043',
   },
-  networkItemSelected: {
-    backgroundColor: '#E8F4FD',
-    borderWidth: 2,
-    borderColor: '#007AFF',
+  menuIcon: {
+    fontSize: 24,
+    color: '#FFFFFF',
   },
-  networkItemName: {
-    fontSize: 16,
+  accountBadge: {
+    backgroundColor: '#141618',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#3C4043',
+  },
+  accountName: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '600',
-    color: '#333',
+    textAlign: 'center',
   },
-  networkItemSymbol: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: 'bold',
+  accountAddress: {
+    color: '#8B92A6',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    textAlign: 'center',
   },
-  modalCloseButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 10,
-    padding: 15,
-    marginTop: 10,
-    alignItems: 'center',
+  networkIcon: {
+    fontSize: 24,
   },
-  modalCloseText: {
-    color: '#fff',
-    fontSize: 16,
+  scrollView: {
+    flex: 1,
+  },
+  networkBadge: {
+    backgroundColor: '#2D3748',
+    marginHorizontal: 15,
+    marginTop: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  networkBadgeText: {
+    color: '#F7931A',
+    fontSize: 12,
     fontWeight: '600',
   },
   infoBox: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    padding: 20,
-    marginBottom: 30,
+    backgroundColor: '#141618',
+    marginHorizontal: 15,
+    marginTop: 15,
+    padding: 15,
+    borderRadius: 12,
   },
   label: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
-    marginTop: 10,
+    color: '#8B92A6',
+    fontSize: 12,
+    marginBottom: 6,
   },
   addressContainer: {
-    backgroundColor: '#FFF',
+    backgroundColor: '#1F2224',
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#3C4043',
   },
   address: {
     fontSize: 12,
-    color: '#333',
+    color: '#FFFFFF',
     fontFamily: 'monospace',
     lineHeight: 18,
   },
@@ -406,130 +406,205 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  balance: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#007AFF',
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  dangerButton: {
-    backgroundColor: '#FF3B30',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 20,
-    marginBottom: 15,
-    color: '#333',
-  },
-  assetsList: {
-    maxHeight: 200,
-    marginBottom: 20,
-  },
-  assetItem: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
-  },
-  assetInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  assetLogo: {
-    fontSize: 32,
-    marginRight: 15,
-  },
-  assetDetails: {
-    flex: 1,
-  },
-  assetSymbol: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  assetBalance: {
+  balancePlain: {
+    color: '#FFFFFF',
     fontSize: 16,
-    color: '#007AFF',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginHorizontal: 5,
-    flexDirection: 'column',
-  },
-  primaryAction: {
-    backgroundColor: '#007AFF',
-  },
-  disabledAction: {
-    backgroundColor: '#B0BEC5',
-  },
-  actionIcon: {
-    fontSize: 24,
-    marginBottom: 5,
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontSize: 14,
     fontWeight: '600',
+    marginTop: 4,
   },
-  transactionItem: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 10,
+  balanceSection: {
+    alignItems: 'center',
+    paddingVertical: 30,
   },
-  transactionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  balanceLabel: {
+    color: '#8B92A6',
+    fontSize: 14,
     marginBottom: 8,
   },
-  transactionAmount: {
-    fontSize: 16,
+  balanceValue: {
+    color: '#FFFFFF',
+    fontSize: 36,
     fontWeight: 'bold',
-    color: '#007AFF',
+    marginBottom: 4,
   },
-  transactionDate: {
-    fontSize: 14,
-    color: '#666',
+  balanceUSD: {
+    color: '#8B92A6',
+    fontSize: 16,
   },
-  transactionDirection: {
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingHorizontal: 15,
+    marginBottom: 30,
+  },
+  actionButton: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  actionIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#037DD6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  actionIconText: {
+    fontSize: 24,
+  },
+  actionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  tabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#3C4043',
+    marginBottom: 15,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  tabActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#037DD6',
+  },
+  tabText: {
+    color: '#8B92A6',
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
   },
-  transactionAddress: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'monospace',
-    marginBottom: 4,
+  tabTextActive: {
+    color: '#037DD6',
   },
-  emptyText: {
-    textAlign: 'center',
-    color: '#999',
+  tokenList: {
+    paddingHorizontal: 15,
+    paddingBottom: 20,
+  },
+  tokenItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141618',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 10,
+  },
+  tokenIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2D3748',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  tokenIconText: {
+    fontSize: 20,
+  },
+  tokenInfo: {
+    flex: 1,
+  },
+  tokenSymbol: {
+    color: '#FFFFFF',
     fontSize: 16,
-    marginTop: 20,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  tokenName: {
+    color: '#8B92A6',
+    fontSize: 12,
+  },
+  tokenBalance: {
+    alignItems: 'flex-end',
+  },
+  tokenBalanceAmount: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  tokenBalanceSymbol: {
+    color: '#8B92A6',
+    fontSize: 12,
+  },
+  placeholderContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  placeholderEmoji: {
+    fontSize: 60,
+    marginBottom: 20,
+  },
+  placeholderTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  placeholderSubtitle: {
+    color: '#8B92A6',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#24272A',
+    borderRadius: 20,
+    padding: 20,
+    width: '85%',
+    maxHeight: '60%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#FFFFFF',
+  },
+  networkItem: {
+    backgroundColor: '#141618',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  networkItemSelected: {
+    backgroundColor: '#2D3748',
+    borderWidth: 2,
+    borderColor: '#037DD6',
+  },
+  networkItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  networkItemSymbol: {
+    fontSize: 14,
+    color: '#037DD6',
+    fontWeight: 'bold',
+  },
+  modalCloseButton: {
+    backgroundColor: '#037DD6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
