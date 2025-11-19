@@ -3,11 +3,13 @@ name: Deploy Web App
 on:
   push:
     branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read
 
 concurrency:
   group: "pages"
@@ -17,19 +19,35 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Startup debug
+        run: |
+          echo "Runner: $RUNNER_NAME"
+          echo "OS: $RUNNER_OS"
+          echo "Github ref: $GITHUB_REF"
+          echo "Github sha: $GITHUB_SHA"
+          echo "Actor: $GITHUB_ACTOR"
+          echo "Repo: $GITHUB_REPOSITORY"
+          echo "Event: $GITHUB_EVENT_NAME"
+          echo "Listing root before checkout:"
+          ls -al
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Node version
-        run: node -v || true
+      - name: Check internet / API
+        run: |
+          echo "Ping GitHub API..."
+          curl -I https://api.github.com || true
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Verify npm version
-        run: npm -v
+      - name: Show versions
+        run: |
+          node -v
+          npm -v
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -41,31 +59,34 @@ jobs:
             ${{ runner.os }}-node-
 
       - name: Install Dependencies
-        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+        run: |
+          echo "Installing dependencies..."
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          echo "Dependencies installed."
+          ls -al
 
       - name: Build Web App
         run: |
-          echo "Running build..."
+          echo "Running production build..."
           npm run build
-          echo "Build finished"
+          echo "Build finished."
+          echo "Tree (top 200 files):"
+          find . -maxdepth 4 -type f | head -n 200
 
-      - name: Show workspace tree
-        run: |
-          echo "Workspace files after build:"
-          find . -maxdepth 3 -type f | head -n 100
-
-      - name: Ensure dist exists
+      - name: Verify dist exists
         run: |
           if [ ! -d dist ]; then
-            echo "ERREUR: dossier dist manquant. Vérifie webpack.output.path"
+            echo "ERREUR: dist/ manquant. Vérifie webpack.output.path."
             exit 1
           fi
+          echo "Contenu dist/:"
           ls -al dist
 
-      - name: Create 404.html (SPA fallback)
+      - name: Add SPA fallback + nojekyll
         run: |
           if [ -f dist/index.html ]; then
             cp dist/index.html dist/404.html
+            touch dist/.nojekyll
           fi
 
       - name: Configure Pages
