@@ -1,5 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Platform,
+} from 'react-native';
 import Toast from 'react-native-toast-message';
 import useWalletStore from '../store/walletStore';
 
@@ -7,13 +14,31 @@ function OnboardingScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
   const createWallet = useWalletStore((state) => state.actions.createWallet);
 
   const handleCreateWallet = async () => {
     if (Platform.OS === 'web') {
       setShowPasswordInput(true);
     } else {
-      await createWallet();
+      try {
+        setIsCreating(true);
+        await createWallet();
+        Toast.show({
+          type: 'success',
+          text1: 'Portefeuille créé',
+          text2: 'Votre portefeuille a été créé avec succès',
+        });
+      } catch (error) {
+        Toast.show({
+          type: 'error',
+          text1: 'Erreur',
+          text2: error?.message || 'Impossible de créer le portefeuille',
+        });
+      } finally {
+        setIsCreating(false);
+      }
     }
   };
 
@@ -36,12 +61,23 @@ function OnboardingScreen() {
       return;
     }
 
-    await createWallet(password);
-    Toast.show({
-      type: 'success',
-      text1: 'Portefeuille créé',
-      text2: 'Votre portefeuille a été créé avec succès',
-    });
+    try {
+      setIsCreating(true);
+      await createWallet(password);
+      Toast.show({
+        type: 'success',
+        text1: 'Portefeuille créé',
+        text2: 'Votre portefeuille a été créé avec succès',
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur',
+        text2: error?.message || 'Impossible de créer le portefeuille',
+      });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -50,10 +86,10 @@ function OnboardingScreen() {
         <Text style={styles.logo}>🦊</Text>
         <Text style={styles.brandName}>Malin Wallet</Text>
       </View>
-      
+
       <Text style={styles.title}>Bienvenue</Text>
       <Text style={styles.subtitle}>
-        {showPasswordInput 
+        {showPasswordInput
           ? 'Créez un mot de passe pour sécuriser votre portefeuille'
           : 'Créez votre portefeuille sécurisé pour les testnets'}
       </Text>
@@ -71,7 +107,7 @@ function OnboardingScreen() {
             autoCapitalize="none"
             autoCorrect={false}
           />
-          
+
           <Text style={styles.label}>Confirmer le mot de passe</Text>
           <TextInput
             style={styles.input}
@@ -87,23 +123,38 @@ function OnboardingScreen() {
           <View style={styles.warningBox}>
             <Text style={styles.warningIcon}>⚠️</Text>
             <Text style={styles.warningText}>
-              DEMO UNIQUEMENT: Ce système de mot de passe n'est pas sécurisé pour la production. Utilisez uniquement pour les tests.
+              DEMO UNIQUEMENT : ce système de mot de passe n&apos;est pas sécurisé pour la
+              production. Utilisez-le uniquement pour les tests.
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={handleConfirmPassword}>
-            <Text style={styles.buttonText}>Créer mon portefeuille</Text>
+          <TouchableOpacity
+            style={[styles.button, isCreating && styles.buttonDisabled]}
+            onPress={handleConfirmPassword}
+            disabled={isCreating}
+          >
+            <Text style={styles.buttonText}>
+              {isCreating ? 'Création...' : 'Créer mon portefeuille'}
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.secondaryButton} 
-            onPress={() => setShowPasswordInput(false)}>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => setShowPasswordInput(false)}
+            disabled={isCreating}
+          >
             <Text style={styles.secondaryButtonText}>Retour</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <TouchableOpacity style={styles.button} onPress={handleCreateWallet}>
-          <Text style={styles.buttonText}>Créer mon portefeuille</Text>
+        <TouchableOpacity
+          style={[styles.button, isCreating && styles.buttonDisabled]}
+          onPress={handleCreateWallet}
+          disabled={isCreating}
+        >
+          <Text style={styles.buttonText}>
+            {isCreating ? 'Création...' : 'Créer mon portefeuille'}
+          </Text>
         </TouchableOpacity>
       )}
     </View>
@@ -171,6 +222,9 @@ const styles = StyleSheet.create({
     borderRadius: 100,
     alignItems: 'center',
     marginBottom: 15,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   buttonText: {
     color: '#FFFFFF',
