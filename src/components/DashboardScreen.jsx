@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, Linking, Modal, Platform } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import useWalletStore, { SUPPORTED_NETWORKS } from '../store/walletStore';
 
 function DashboardScreen() {
@@ -15,6 +16,14 @@ function DashboardScreen() {
   const switchNetwork = useWalletStore((state) => state.actions.switchNetwork);
 
   const [modalVisible, setModalVisible] = useState(false);
+  
+  // Use React Navigation when available (web/App.tsx)
+  let navigation = null;
+  try {
+    navigation = useNavigation();
+  } catch (e) {
+    // Navigation not available (App.jsx), will use store-based navigation
+  }
 
   useEffect(() => {
     if (address) {
@@ -44,6 +53,60 @@ function DashboardScreen() {
         },
       ],
     );
+  };
+
+  const handleReceive = () => {
+    // For store-based navigation (App.jsx)
+    setScreen('receive');
+    
+    // For React Navigation (App.tsx / web)
+    if (navigation && typeof navigation.navigate === 'function') {
+      try {
+        navigation.navigate('Receive');
+      } catch (e) {
+        console.log('Navigation to Receive failed:', e);
+      }
+    }
+  };
+
+  const handleSend = (asset) => {
+    // For store-based navigation (App.jsx)
+    setScreen('send', asset);
+    
+    // For React Navigation (App.tsx / web)
+    if (navigation && typeof navigation.navigate === 'function') {
+      try {
+        navigation.navigate('Send');
+      } catch (e) {
+        console.log('Navigation to Send failed:', e);
+      }
+    }
+  };
+
+  const handleCopyAddress = async () => {
+    try {
+      // Try web clipboard API first
+      if (Platform.OS === 'web' && navigator.clipboard) {
+        await navigator.clipboard.writeText(address);
+        Alert.alert('Succès', 'Adresse copiée dans le presse-papiers');
+      } else {
+        // Fallback to React Native Clipboard (will be imported dynamically)
+        const { default: Clipboard } = await import('react-native').then(rn => ({ default: rn.Clipboard }));
+        Clipboard.setString(address);
+        Alert.alert('Succès', 'Adresse copiée dans le presse-papiers');
+      }
+    } catch (error) {
+      console.log('Failed to copy address:', error);
+      Alert.alert('Erreur', 'Impossible de copier l\'adresse');
+    }
+  };
+
+  const handleBuy = () => {
+    Alert.alert('Acheter', 'Fonctionnalité à venir : achat de crypto avec carte bancaire.');
+  };
+
+  const handleSell = () => {
+    Alert.alert('Vendre', 'Fonctionnalité à venir : vente de crypto vers compte bancaire.');
   };
 
   return (
@@ -94,9 +157,14 @@ function DashboardScreen() {
 
       <View style={styles.infoBox}>
         <Text style={styles.label}>Adresse :</Text>
-        <Text style={styles.address} numberOfLines={1} ellipsizeMode="middle">
-          {address}
-        </Text>
+        <View style={styles.addressContainer}>
+          <Text style={styles.address} selectable={true}>
+            {address}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.copyButton} onPress={handleCopyAddress}>
+          <Text style={styles.copyButtonText}>📋 Copier l'adresse</Text>
+        </TouchableOpacity>
 
         <Text style={styles.label}>Solde total :</Text>
         <Text style={styles.balance}>{balance} {currentNetwork.symbol}</Text>
@@ -110,7 +178,7 @@ function DashboardScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.assetItem}
-            onPress={() => setScreen('send', item)}>
+            onPress={() => handleSend(item)}>
             <View style={styles.assetInfo}>
               {item.logo ? (
                 <Text style={styles.assetLogo}>🪙</Text>
@@ -127,13 +195,32 @@ function DashboardScreen() {
         style={styles.assetsList}
       />
 
-      <TouchableOpacity style={styles.button} onPress={() => setScreen('receive')}>
-        <Text style={styles.buttonText}>Recevoir</Text>
-      </TouchableOpacity>
+      <Text style={styles.sectionTitle}>Actions</Text>
 
-      <TouchableOpacity style={styles.button} onPress={lockWallet}>
-        <Text style={styles.buttonText}>Verrouiller</Text>
-      </TouchableOpacity>
+      <View style={styles.actionsRow}>
+        <TouchableOpacity style={[styles.actionButton, styles.primaryAction]} onPress={handleReceive}>
+          <Text style={styles.actionIcon}>📥</Text>
+          <Text style={styles.actionButtonText}>Recevoir</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.actionButton, styles.primaryAction]} onPress={handleBuy}>
+          <Text style={styles.actionIcon}>💳</Text>
+          <Text style={styles.actionButtonText}>Acheter</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.actionsRow}>
+        <TouchableOpacity style={[styles.actionButton, styles.disabledAction]} onPress={handleSell}>
+          <Text style={styles.actionIcon}>💰</Text>
+          <Text style={styles.actionButtonText}>Vendre</Text>
+        </TouchableOpacity>
+      </View>
+
+      {Platform.OS !== 'web' && (
+        <TouchableOpacity style={styles.button} onPress={lockWallet}>
+          <Text style={styles.buttonText}>Verrouiller</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         style={[styles.button, styles.dangerButton]}
@@ -279,11 +366,32 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     marginTop: 10,
   },
+  addressContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
   address: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#333',
     fontFamily: 'monospace',
-    marginBottom: 15,
+    lineHeight: 18,
+  },
+  copyButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  copyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   balance: {
     fontSize: 24,
@@ -342,6 +450,35 @@ const styles = StyleSheet.create({
   assetBalance: {
     fontSize: 16,
     color: '#007AFF',
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginHorizontal: 5,
+    flexDirection: 'column',
+  },
+  primaryAction: {
+    backgroundColor: '#007AFF',
+  },
+  disabledAction: {
+    backgroundColor: '#B0BEC5',
+  },
+  actionIcon: {
+    fontSize: 24,
+    marginBottom: 5,
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   transactionItem: {
     backgroundColor: '#F5F5F5',
