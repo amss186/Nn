@@ -43,7 +43,8 @@ jobs:
       - name: Verify dist exists
         run: |
           if [ ! -d dist ]; then
-            echo "Le dossier dist/ est introuvable. Vérifie la configuration output de webpack."
+            echo "Le dossier dist/ est introuvable (build webpack?)."
+            ls -al
             exit 1
           fi
 
