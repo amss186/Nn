@@ -6,7 +6,8 @@ import {
   User,
   onAuthStateChanged,
 } from 'firebase/auth';
-import { auth } from '../firebaseConfig';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
 
 export type AuthUser = {
   email: string | null;
@@ -56,4 +57,39 @@ export function observeAuthState(callback: (user: AuthUser | null) => void) {
       emailVerified: user.emailVerified,
     });
   });
+}
+
+/**
+ * Link a wallet address to a Firebase user in Firestore
+ * Stores only the wallet address (NOT the mnemonic) in users/{uid}
+ */
+export async function linkWalletAddressToUser(
+  uid: string,
+  walletAddress: string,
+): Promise<void> {
+  const userDocRef = doc(db, 'users', uid);
+  await setDoc(
+    userDocRef,
+    {
+      walletAddress,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+}
+
+/**
+ * Get the wallet address for a Firebase user from Firestore
+ * Returns the address or null if not found
+ */
+export async function getUserWalletAddress(uid: string): Promise<string | null> {
+  const userDocRef = doc(db, 'users', uid);
+  const docSnap = await getDoc(userDocRef);
+  
+  if (docSnap.exists()) {
+    const data = docSnap.data();
+    return data.walletAddress || null;
+  }
+  
+  return null;
 }

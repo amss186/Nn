@@ -6,17 +6,26 @@ import {
   TouchableOpacity,
   TextInput,
   Platform,
+  ScrollView,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { ethers } from 'ethers';
 import useWalletStore from '../store/walletStore';
+import { auth } from '../firebaseConfig';
+import { linkWalletAddressToUser } from '../services/authService';
 
 function OnboardingScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [showImportInput, setShowImportInput] = useState(false);
+  const [mnemonic, setMnemonic] = useState('');
 
   const createWallet = useWalletStore((state) => state.actions.createWallet);
+  const importWalletFromMnemonic = useWalletStore(
+    (state) => state.actions.importWalletFromMnemonic,
+  );
 
   const handleCreateWallet = async () => {
     if (Platform.OS === 'web') {
@@ -80,94 +89,261 @@ function OnboardingScreen() {
     }
   };
 
+  const handleImportWallet = () => {
+    setShowImportInput(true);
+    setShowPasswordInput(false);
+  };
+
+  const handleConfirmImport = async () => {
+    const trimmedMnemonic = mnemonic.trim();
+    
+    if (!trimmedMnemonic) {
+      Toast.show({
+        type: 'error',
+        text1: 'Mnemonic requise',
+        text2: 'Veuillez entrer votre phrase de récupération.',
+      });
+      return;
+    }
+
+    // Validate word count (12 or 24 words)
+    const words = trimmedMnemonic.split(/\s+/);
+    if (words.length !== 12 && words.length !== 24) {
+      Toast.show({
+        type: 'error',
+        text1: 'Mnemonic invalide',
+        text2: 'La phrase doit contenir 12 ou 24 mots.',
+      });
+      return;
+    }
+
+    // On web, require password for demo encryption
+    if (Platform.OS === 'web' && !password) {
+      Toast.show({
+        type: 'error',
+        text1: 'Mot de passe requis',
+        text2: 'Entrez un mot de passe pour sécuriser votre wallet.',
+      });
+      return;
+    }
+
+    // Validate mnemonic
+    try {
+      ethers.Wallet.fromPhrase(trimmedMnemonic);
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Mnemonic invalide',
+        text2: 'La phrase de récupération est incorrecte.',
+      });
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+      // Import wallet using store action
+      const walletAddress = await importWalletFromMnemonic(
+        trimmedMnemonic,
+        password || undefined,
+      );
+
+      // If user is signed in with Firebase, link wallet address
+      const currentUser = auth.currentUser;
+      if (currentUser) {
+        await linkWalletAddressToUser(currentUser.uid, walletAddress);
+      }
+
+      Toast.show({
+        type: 'success',
+        text1: 'Wallet importé',
+        text2: 'Vous pouvez maintenant utiliser votre wallet.',
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Erreur d\'importation',
+        text2: error?.message || 'Impossible d\'importer le wallet.',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        <Text style={styles.logo}>🦊</Text>
-        <Text style={styles.brandName}>Malin Wallet</Text>
-      </View>
-
-      <Text style={styles.title}>Bienvenue</Text>
-      <Text style={styles.subtitle}>
-        {showPasswordInput
-          ? 'Créez un mot de passe pour sécuriser votre portefeuille'
-          : 'Créez votre portefeuille sécurisé pour les testnets'}
-      </Text>
-
-      {Platform.OS === 'web' && showPasswordInput ? (
-        <View style={styles.formContainer}>
-          <Text style={styles.label}>Mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Entrez votre mot de passe"
-            placeholderTextColor="#8B92A6"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <Text style={styles.label}>Confirmer le mot de passe</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Confirmez votre mot de passe"
-            placeholderTextColor="#8B92A6"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <View style={styles.warningBox}>
-            <Text style={styles.warningIcon}>⚠️</Text>
-            <Text style={styles.warningText}>
-              DEMO UNIQUEMENT : ce système de mot de passe n&apos;est pas sécurisé pour la
-              production. Utilisez-le uniquement pour les tests.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, isCreating && styles.buttonDisabled]}
-            onPress={handleConfirmPassword}
-            disabled={isCreating}
-          >
-            <Text style={styles.buttonText}>
-              {isCreating ? 'Création...' : 'Créer mon portefeuille'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => setShowPasswordInput(false)}
-            disabled={isCreating}
-          >
-            <Text style={styles.secondaryButtonText}>Retour</Text>
-          </TouchableOpacity>
+    <ScrollView 
+      contentContainerStyle={styles.scrollContainer}
+      style={{ flex: 1, backgroundColor: '#24272A' }}
+    >
+      <View style={styles.container}>
+        <View style={styles.logoContainer}>
+          <Text style={styles.logo}>🦊</Text>
+          <Text style={styles.brandName}>Malin Wallet</Text>
         </View>
-      ) : (
-        <TouchableOpacity
-          style={[styles.button, isCreating && styles.buttonDisabled]}
-          onPress={handleCreateWallet}
-          disabled={isCreating}
-        >
-          <Text style={styles.buttonText}>
-            {isCreating ? 'Création...' : 'Créer mon portefeuille'}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
+
+        <Text style={styles.title}>Bienvenue</Text>
+        <Text style={styles.subtitle}>
+          {showImportInput
+            ? 'Importez votre portefeuille existant'
+            : showPasswordInput
+            ? 'Créez un mot de passe pour sécuriser votre portefeuille'
+            : 'Créez votre portefeuille sécurisé pour les testnets'}
+        </Text>
+
+        {showImportInput ? (
+          <View style={styles.formContainer}>
+            <Text style={styles.label}>Phrase de récupération (12 ou 24 mots)</Text>
+            <TextInput
+              style={styles.mnemonicInput}
+              placeholder="Entrez votre phrase de récupération séparée par des espaces"
+              placeholderTextColor="#8B92A6"
+              value={mnemonic}
+              onChangeText={setMnemonic}
+              multiline
+              numberOfLines={4}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            {Platform.OS === 'web' && (
+              <>
+                <Text style={styles.label}>Mot de passe (pour chiffrement local)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Entrez votre mot de passe"
+                  placeholderTextColor="#8B92A6"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </>
+            )}
+
+            <View style={styles.warningBox}>
+              <Text style={styles.warningIcon}>⚠️</Text>
+              <Text style={styles.warningText}>
+                Votre phrase ne sera JAMAIS envoyée au serveur. Seule l&apos;adresse publique
+                sera stockée. La phrase est chiffrée localement.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, isCreating && styles.buttonDisabled]}
+              onPress={handleConfirmImport}
+              disabled={isCreating}
+            >
+              <Text style={styles.buttonText}>
+                {isCreating ? 'Importation...' : 'Importer mon portefeuille'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => {
+                setShowImportInput(false);
+                setMnemonic('');
+                setPassword('');
+              }}
+              disabled={isCreating}
+            >
+              <Text style={styles.secondaryButtonText}>Retour</Text>
+            </TouchableOpacity>
+          </View>
+        ) : Platform.OS === 'web' && showPasswordInput ? (
+          <View style={styles.formContainer}>
+            <Text style={styles.label}>Mot de passe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Entrez votre mot de passe"
+              placeholderTextColor="#8B92A6"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Text style={styles.label}>Confirmer le mot de passe</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Confirmez votre mot de passe"
+              placeholderTextColor="#8B92A6"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <View style={styles.warningBox}>
+              <Text style={styles.warningIcon}>⚠️</Text>
+              <Text style={styles.warningText}>
+                DEMO UNIQUEMENT : ce système de mot de passe n&apos;est pas sécurisé pour la
+                production. Utilisez-le uniquement pour les tests.
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, isCreating && styles.buttonDisabled]}
+              onPress={handleConfirmPassword}
+              disabled={isCreating}
+            >
+              <Text style={styles.buttonText}>
+                {isCreating ? 'Création...' : 'Créer mon portefeuille'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => {
+                setShowPasswordInput(false);
+                setPassword('');
+                setConfirmPassword('');
+              }}
+              disabled={isCreating}
+            >
+              <Text style={styles.secondaryButtonText}>Retour</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.formContainer}>
+            <TouchableOpacity
+              style={[styles.button, isCreating && styles.buttonDisabled]}
+              onPress={handleCreateWallet}
+              disabled={isCreating}
+            >
+              <Text style={styles.buttonText}>
+                {isCreating ? 'Création...' : 'Créer mon portefeuille'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleImportWallet}
+              disabled={isCreating}
+            >
+              <Text style={styles.secondaryButtonText}>Importer un portefeuille existant</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#24272A',
+  },
+  container: {
+    width: '100%',
+    maxWidth: 500,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   logoContainer: {
     alignItems: 'center',
@@ -214,6 +390,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#3C4043',
+  },
+  mnemonicInput: {
+    backgroundColor: '#141618',
+    borderRadius: 8,
+    padding: 15,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#3C4043',
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   button: {
     backgroundColor: '#037DD6',

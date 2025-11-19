@@ -7,7 +7,9 @@ A Web3 wallet application for Ethereum testnets with a MetaMask-inspired dark th
 ## Features
 
 - 🦊 MetaMask-style dark theme UI
-- 🔐 Firebase authentication for web (email/password with verification)
+- 🔐 Password-based authentication for web (demo mode)
+- 📥 **Wallet import from mnemonic (12/24 words)**
+- 🔥 **Firebase integration**: Wallet address linked to user account
 - 💸 Send and receive ETH on Ethereum Sepolia testnet
 - 🔄 Demo swap functionality
 - 🪙 Token balance viewing
@@ -101,6 +103,14 @@ const firebaseConfig = {
    - Set a password (minimum 4 characters) for wallet encryption on web
    - Note: Wallet data is stored in localStorage (demo mode)
 
+2. **Import Wallet (NEW)**
+   - Navigate to https://pulseailab.me
+   - Click "Importer un portefeuille existant"
+   - Enter your 12 or 24-word recovery phrase
+   - Set a password for local encryption (web demo only)
+   - The wallet is imported and ready to use
+   - **Security**: Your mnemonic is NEVER sent to the server. Only the wallet address is stored in Firestore if you're signed in with Firebase.
+
 3. **Backup Phrase**
    - Write down your 12-word recovery phrase
    - Store it securely - this is the ONLY way to recover your wallet
@@ -146,6 +156,51 @@ const firebaseConfig = {
    - Enter password to unlock
    - On native apps, uses biometric authentication
 
+## Wallet Import & Firebase Integration
+
+### How it Works
+
+This wallet implements a secure wallet import flow with Firebase integration:
+
+1. **Local Storage Only**: 
+   - Your mnemonic (recovery phrase) is stored ONLY on your device
+   - Web: Encrypted with password in localStorage (demo only)
+   - Native: Secured with device Keychain/SecureStore
+
+2. **Firestore Integration**:
+   - Only your wallet ADDRESS (public) is stored in Firestore
+   - Stored under `users/{uid}/walletAddress`
+   - The mnemonic is NEVER sent to Firebase or any server
+
+3. **Import Process**:
+   - Enter your 12 or 24-word recovery phrase
+   - Set a password for local encryption (web only)
+   - Wallet is validated using ethers.js
+   - Mnemonic is encrypted and stored locally
+   - If signed in with Firebase, the address is linked to your account
+
+### Testing Wallet Import
+
+To test the import functionality:
+
+```bash
+# 1. Create a test wallet first to get a mnemonic
+# 2. Copy the mnemonic from the backup screen
+# 3. Delete the wallet from settings
+# 4. Use "Importer un portefeuille existant" to restore it
+```
+
+### Firebase Firestore Structure
+
+```
+users/
+  {uid}/
+    walletAddress: "0x..."
+    updatedAt: "2025-11-19T..."
+```
+
+**Note**: The mnemonic is NEVER stored in Firestore for security reasons.
+
 ### Security Warnings
 
 ⚠️ **IMPORTANT**: This is a **DEMO/TESTNET ONLY** implementation.
@@ -167,6 +222,13 @@ For production deployments:
 - Implement proper encryption for wallet data
 - Never store sensitive data in localStorage
 - Use only on testnets for development
+
+**Wallet Import Security**:
+- 🔒 Your mnemonic is NEVER sent to any server
+- 🔒 Only the public wallet address is stored in Firestore
+- 🔒 Mnemonic is encrypted locally on your device
+- ⚠️ Web demo: Uses localStorage (not production-ready)
+- ✅ Native apps: Uses platform Keychain/SecureStore
 
 ### Network Configuration
 
