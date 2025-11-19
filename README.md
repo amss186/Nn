@@ -7,7 +7,7 @@ A Web3 wallet application for Ethereum testnets with a MetaMask-inspired dark th
 ## Features
 
 - 🦊 MetaMask-style dark theme UI
-- 🔐 Password-based authentication for web (demo mode)
+- 🔐 Firebase authentication for web (email/password with verification)
 - 💸 Send and receive ETH on Ethereum Sepolia testnet
 - 🔄 Demo swap functionality
 - 🪙 Token balance viewing
@@ -22,32 +22,92 @@ The app is deployed at: **https://pulseailab.me**
 
 ```sh
 # Install dependencies
-npm install
+npm install --legacy-peer-deps
 
 # Start development server
 npm run web
 
 # Build for production
 npm run build
+
+# Serve production build locally
+npm start
 ```
 
 The web app will be available at `http://localhost:8080` in development mode.
 
+### Firebase Configuration
+
+The app uses Firebase Authentication for web deployments. Firebase credentials are configured in `src/firebaseConfig.ts`:
+
+```typescript
+const firebaseConfig = {
+  apiKey: 'YOUR_API_KEY',
+  authDomain: 'YOUR_PROJECT.firebaseapp.com',
+  projectId: 'YOUR_PROJECT',
+  storageBucket: 'YOUR_PROJECT.firebasestorage.app',
+  messagingSenderId: 'YOUR_SENDER_ID',
+  appId: 'YOUR_APP_ID',
+  measurementId: 'YOUR_MEASUREMENT_ID',
+};
+```
+
+**Note**: The repository includes demo Firebase credentials. For production use, create your own Firebase project and update `src/firebaseConfig.ts` with your credentials.
+
+### Firebase Authentication Flow
+
+**On Web Platform Only:**
+1. **Authentication Screen** - First screen shown to unauthenticated users
+   - Sign up with email/password
+   - Log in with existing account
+   - Request password reset
+
+2. **Email Verification** - Required after signup
+   - Verification email sent automatically
+   - User must verify email before accessing wallet
+
+3. **Wallet Flow** - After authentication and email verification
+   - Create wallet or unlock existing wallet
+   - Full wallet functionality
+
+**On Native Platforms (iOS/Android):**
+- Firebase authentication is bypassed
+- Users go directly to wallet creation/unlock flow
+
+### Firebase Service Files
+
+- **src/firebaseConfig.ts**: Initializes Firebase with project credentials
+- **src/services/authService.ts**: Authentication functions
+  - `signupWithEmail(email, password)`: Create new account
+  - `loginWithEmail(email, password)`: Sign in to existing account
+  - `requestPasswordReset(email)`: Send password reset email
+  - `observeAuthState(callback)`: Monitor authentication state changes
+- **src/screens/AuthScreen.tsx**: UI for signup/login/password reset
+
 ### Testing the Complete Flow on Web
 
-1. **Create Wallet**
+1. **Authentication (Web Only)**
    - Navigate to https://pulseailab.me
-   - Click "Créer mon portefeuille"
-   - Set a password (minimum 4 characters) - DEMO ONLY, NOT SECURE
-   - Note: Password is stored in localStorage (not secure for production)
+   - Choose "Créer un compte" (Sign up)
+   - Enter email and password (minimum 6 characters)
+   - Confirm password
+   - Check your email for verification link
+   - Click verification link
+   - Return to app and log in
 
-2. **Backup Phrase**
+2. **Create Wallet**
+   - After email verification and login
+   - Click "Créer mon portefeuille"
+   - Set a password (minimum 4 characters) for wallet encryption on web
+   - Note: Wallet data is stored in localStorage (demo mode)
+
+3. **Backup Phrase**
    - Write down your 12-word recovery phrase
    - Store it securely - this is the ONLY way to recover your wallet
    - Check the confirmation box
    - Verify 3 random words from your phrase
 
-3. **Dashboard**
+4. **Dashboard**
    - View your balance (testnet ETH)
    - See network status (Ethereum Sepolia - Testnet)
    - Access four main actions:
@@ -56,45 +116,57 @@ The web app will be available at `http://localhost:8080` in development mode.
      - 📤 Envoyer (Send)
      - 📥 Recevoir (Receive)
 
-4. **Receive ETH**
+5. **Receive ETH**
    - Click "Recevoir"
    - Copy your wallet address
    - Get testnet ETH from Sepolia faucet: https://sepoliafaucet.com/
    - Wait for transaction confirmation
 
-5. **Send ETH**
+6. **Send ETH**
    - Click "Envoyer"
    - Enter recipient address
    - Enter amount
    - Confirm transaction
    - Transaction will appear on Sepolia Etherscan
 
-6. **Demo Swap**
+7. **Demo Swap**
    - Click "Échanger"
    - Enter amount to swap
    - This performs a real testnet transaction to your own address
    - Useful for testing transaction flows
 
-7. **Settings**
+8. **Settings**
    - Click menu icon (☰) in top left
    - View recovery phrase (with warning)
    - Lock wallet
    - Delete wallet (with confirmation)
 
-8. **Lock/Unlock**
+9. **Lock/Unlock**
    - Lock wallet from Settings
    - Enter password to unlock
    - On native apps, uses biometric authentication
 
 ### Security Warnings
 
-⚠️ **IMPORTANT**: The web version uses localStorage for password storage, which is **NOT SECURE** for production use. This is a **DEMO/TESTNET ONLY** implementation.
+⚠️ **IMPORTANT**: This is a **DEMO/TESTNET ONLY** implementation.
+
+**Firebase Authentication:**
+- Firebase credentials are included in the repository for demo purposes
+- Email verification is required for web access
+- Firebase Authentication provides secure user authentication
+- For production, rotate Firebase credentials and enable additional security features
+
+**Wallet Storage:**
+- Web version uses localStorage for wallet storage (not secure for production)
+- Private keys should be properly encrypted in production
+- Never use with real mainnet funds
 
 For production deployments:
-- Use hardware wallets or secure enclaves
-- Implement proper encryption
-- Never store private keys in localStorage
-- Use only on testnets
+- Create your own Firebase project with production security rules
+- Use hardware wallets or secure enclaves for key storage
+- Implement proper encryption for wallet data
+- Never store sensitive data in localStorage
+- Use only on testnets for development
 
 ### Network Configuration
 
