@@ -4,6 +4,7 @@ const webpack = require('webpack');
 
 const appDirectory = path.resolve(__dirname);
 
+// Liste des modules qui DOIVENT être compilés par Babel
 const compileNodeModules = [
   'react-native',
   '@react-native',
@@ -19,13 +20,18 @@ const compileNodeModules = [
   'react-native-screens',
   '@react-navigation',
   'alchemy-sdk',
-  'firebase'
+  'firebase',
+  '@walletconnect',
+  '@json-rpc-tools',
+  'eventemitter3'
 ];
 
 const babelLoaderConfiguration = {
   test: /\.(js|jsx|ts|tsx)$/,
   include: (input) => {
+    // Toujours compiler le code source
     if (!input.includes('node_modules')) return true;
+    // Compiler les modules de la liste blanche
     return compileNodeModules.some(m => input.includes(m));
   },
   use: {
@@ -34,16 +40,25 @@ const babelLoaderConfiguration = {
       cacheDirectory: true,
       babelrc: false,
       configFile: false,
-      presets: ['module:metro-react-native-babel-preset'],
+      presets: [
+        ['module:metro-react-native-babel-preset']
+      ],
       plugins: [
-        ['react-native-web', { commonjs: true }]
+        ['react-native-web', { commonjs: true }],
+        // --- PLUGINS DE COMPATIBILITÉ AJOUTÉS ---
+        ['@babel/plugin-proposal-export-namespace-from'],
+        ['@babel/plugin-proposal-class-properties', { loose: true }],
+        ['@babel/plugin-proposal-private-methods', { loose: true }],
+        ['@babel/plugin-proposal-private-property-in-object', { loose: true }]
       ],
     },
   },
 };
 
 module.exports = {
-  entry: { app: path.join(appDirectory, 'index.web.js') },
+  entry: {
+    app: path.join(appDirectory, 'index.web.js'),
+  },
   output: {
     path: path.resolve(appDirectory, 'dist'),
     publicPath: '/',
@@ -52,27 +67,42 @@ module.exports = {
   resolve: {
     extensions: ['.web.tsx', '.web.ts', '.tsx', '.ts', '.web.js', '.js', '.jsx', '.web.jsx'],
     alias: {
-      'react-native$': 'react-native-web'
-      // Active seulement si besoin d'un shim abitype:
-      // 'abitype': path.resolve(appDirectory, 'abitype-shim.js'),
+      'react-native$': 'react-native-web',
+      // Leurre pour le Keychain sur le Web
+      'react-native-keychain': path.resolve(appDirectory, 'keychain.mock.js'),
     },
     fallback: {
       crypto: require.resolve('crypto-browserify'),
       stream: require.resolve('stream-browserify'),
       vm: require.resolve('vm-browserify'),
       buffer: require.resolve('buffer/'),
-      process: require.resolve('process/browser')
+      process: require.resolve('process/browser'),
+      path: require.resolve('path-browserify'),
+      fs: false
     }
   },
   module: {
     rules: [
       babelLoaderConfiguration,
-      { test: /\.(jpg|png|woff|woff2|eot|ttf|svg)$/, type: 'asset/resource' },
       {
+        test: /\.(jpg|png|woff|woff2|eot|ttf|svg)$/,
+        type: 'asset/resource'
+      },
+      {
+        // Force le chargement des polices d'icônes
         test: /\.ttf$/,
-        loader: 'url-loader',
+        loader: 'url-loader', 
         include: path.resolve(__dirname, 'node_modules/react-native-vector-icons'),
       },
+      {
+        // Gère les fichiers .mjs de WalletConnect
+        test: /\.mjs$/,
+        include: /node_modules/,
+        type: 'javascript/auto',
+        resolve: {
+            fullySpecified: false
+        }
+      }
     ],
   },
   plugins: [
@@ -88,5 +118,6 @@ module.exports = {
       global: 'globalThis'
     })
   ],
-  stats: { errorDetails: true }
 };
+
+
