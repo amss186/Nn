@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect, useState, useRef } from 'react';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { Platform } from 'react-native';
@@ -17,54 +17,57 @@ import WalletConnectModal from './src/components/WalletConnectModal';
 import AuthScreen from './src/screens/AuthScreen';
 
 import useWalletStore from './src/store/walletStore';
-import { observeAuthState, AuthUser, handleRedirectResultOnLoad, linkWalletAddressToUser } from './src/services/authService';
-// Import firebaseConfig to ensure Firebase is initialized
+import {
+  observeAuthState,
+  AuthUser,
+  handleRedirectResultOnLoad,
+  linkWalletAddressToUser
+} from './src/services/authService';
 import './src/firebaseConfig';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  const isWalletCreated = useWalletStore((state) => state.isWalletCreated);
-  const isWalletUnlocked = useWalletStore((state) => state.isWalletUnlocked);
-  const needsBackup = useWalletStore((state) => state.needsBackup);
-  const checkStorage = useWalletStore((state) => state.actions.checkStorage);
-  const walletStore = useWalletStore();
+  const navRef = useRef<NavigationContainerRef<any>>(null);
 
-  // Firebase auth state (only on web)
+  const isWalletCreated    = useWalletStore((s) => s.isWalletCreated);
+  const isWalletUnlocked   = useWalletStore((s) => s.isWalletUnlocked);
+  const needsBackup        = useWalletStore((s) => s.needsBackup);
+  const hasBackedUp        = useWalletStore((s) => s.hasBackedUp);
+  const walletAddress      = useWalletStore((s) => s.address);
+  const checkStorage       = useWalletStore((s) => s.actions.checkStorage);
+  const walletStore        = useWalletStore();
+
   const [firebaseUser, setFirebaseUser] = useState<AuthUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [authLoading, setAuthLoading]   = useState(true);
 
+  // 1. Vérifier l'existence locale du portefeuille
   useEffect(() => {
     checkStorage();
   }, [checkStorage]);
 
-  // Handle redirect result on app load (web only)
+  // 2. Gérer le retour Google redirect (web)
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       handleRedirectResultOnLoad()
         .then((user) => {
           if (user) {
-            // User returned from redirect flow
             Toast.show({
               type: 'success',
               text1: 'Connecté avec Google',
               text2: `Bienvenue ${user.email}`,
             });
 
-            // Check if wallet exists and link it
-            const walletAddress = walletStore.address;
             if (walletStore.isWalletCreated && walletAddress) {
               linkWalletAddressToUser(user.uid, walletAddress)
                 .then(() => {
                   Toast.show({
                     type: 'success',
                     text1: 'Portefeuille lié',
-                    text2: 'Votre portefeuille a été lié à votre compte Google.',
+                    text2: 'Adresse liée à votre compte.',
                   });
                 })
-                .catch((err) => {
-                  console.error('Error linking wallet after redirect:', err);
-                });
+                .catch((err) => console.error('Link wallet after redirect error:', err));
             } else {
               Toast.show({
                 type: 'info',
@@ -75,7 +78,7 @@ export default function App() {
           }
         })
         .catch((err) => {
-          console.error('Error handling redirect result:', err);
+          console.error('Redirect result error:', err);
           Toast.show({
             type: 'error',
             text1: 'Erreur',
@@ -85,54 +88,88 @@ export default function App() {
     }
   }, []);
 
-  // Observe Firebase auth state on web only
+  // 3. Observer Firebase (web)
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const unsubscribe = observeAuthState((user) => {
+      const unsub = observeAuthState((user) => {
         setFirebaseUser(user);
         setAuthLoading(false);
       });
-      return unsubscribe;
+      return unsub;
     } else {
-      // On native, skip Firebase auth
       setAuthLoading(false);
     }
   }, []);
 
-  // Show loading state while checking auth
+  // 4. Redirection centralisée quand état change
+  useEffect(() => {
+    if (authLoading) return;
+
+    const needsAuth = Platform.OS === 'web' && (!firebaseUser || !firebaseUser.emailVerified);
+
+    if (needsAuth) {
+      if (navRef.current?.getCurrentRoute()?.name !== 'Auth') {
+        navRef.current?.navigate('Auth');
+      }
+      return;
+    }
+
+    // Auth OK : choisir destination
+    if (!isWalletCreated) {
+      if (navRef.current?.getCurrentRoute()?.name !== 'Onboarding') {
+        navRef.current?.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
+      }
+      return;
+    }
+
+    if (needsBackup && !hasBackedUp) {
+      if (navRef.current?.getCurrentRoute()?.name !== 'Backup') {
+        navRef.current?.reset({ index: 0, routes: [{ name: 'Backup' }] });
+      }
+      return;
+    }
+
+    if (!isWalletUnlocked) {
+      if (navRef.current?.getCurrentRoute()?.name !== 'Locked') {
+        navRef.current?.reset({ index: 0, routes: [{ name: 'Locked' }] });
+      }
+      return;
+    }
+
+    // Tout bon -> Dashboard
+    if (navRef.current?.getCurrentRoute()?.name !== 'Dashboard') {
+      navRef.current?.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
+    }
+  }, [
+    authLoading,
+    firebaseUser,
+    firebaseUser?.emailVerified,
+    isWalletCreated,
+    needsBackup,
+    hasBackedUp,
+    isWalletUnlocked
+  ]);
+
   if (authLoading && Platform.OS === 'web') {
     return null;
   }
 
-  // On web, require Firebase authentication before wallet flow
   const needsAuth = Platform.OS === 'web' && (!firebaseUser || !firebaseUser.emailVerified);
 
   return (
     <PaperProvider>
-      <NavigationContainer>
+      <NavigationContainer ref={navRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {needsAuth ? (
-            <Stack.Screen name="Auth" component={AuthScreen} />
-          ) : !isWalletCreated ? (
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          ) : needsBackup ? (
-            <>
-              <Stack.Screen name="Backup" component={BackupScreen} />
-              <Stack.Screen
-                name="BackupVerify"
-                component={BackupVerifyScreen}
-              />
-            </>
-          ) : !isWalletUnlocked ? (
-            <Stack.Screen name="Locked" component={LockedScreen} />
-          ) : (
-            <>
-              <Stack.Screen name="Dashboard" component={DashboardScreen} />
-              <Stack.Screen name="Send" component={SendScreen} />
-              <Stack.Screen name="Receive" component={ReceiveScreen} />
-              <Stack.Screen name="Scan" component={ScanScreen} />
-            </>
-          )}
+          {/* On garde toutes les routes pour les navigations programmatiques */}
+          <Stack.Screen name="Auth" component={AuthScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="Backup" component={BackupScreen} />
+          <Stack.Screen name="BackupVerify" component={BackupVerifyScreen} />
+          <Stack.Screen name="Locked" component={LockedScreen} />
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <Stack.Screen name="Send" component={SendScreen} />
+          <Stack.Screen name="Receive" component={ReceiveScreen} />
+          <Stack.Screen name="Scan" component={ScanScreen} />
         </Stack.Navigator>
         <WalletConnectModal />
         <Toast />
