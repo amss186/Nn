@@ -3,8 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 const appDirectory = path.resolve(__dirname);
 
-// Liste de tous les mots-clés qui doivent être compilés
-// Si un fichier contient un de ces mots, il passera par Babel.
+// Liste des modules à compiler (Expo, Vector Icons, etc.)
 const compileNodeModules = [
   'react-native',
   '@react-native',
@@ -24,14 +23,8 @@ const compileNodeModules = [
 
 const babelLoaderConfiguration = {
   test: /\.(js|jsx|ts|tsx)$/,
-  // C'EST ICI LA CORRECTION MAJEURE
-  // Au lieu d'une liste de chemins, on utilise une fonction intelligente
   include: (input) => {
-    // 1. Toujours compiler les fichiers du projet (hors node_modules)
-    if (!input.includes('node_modules')) {
-      return true;
-    }
-    // 2. Compiler les fichiers node_modules qui sont dans notre liste blanche
+    if (!input.includes('node_modules')) return true;
     return compileNodeModules.some((moduleName) => input.includes(moduleName));
   },
   use: {
@@ -40,19 +33,11 @@ const babelLoaderConfiguration = {
       cacheDirectory: true,
       babelrc: false,
       configFile: false,
-      presets: [
-        ['@babel/preset-env', { targets: { browsers: ['last 2 versions'] } }],
-        '@babel/preset-react',
-        '@babel/preset-typescript',
-        '@babel/preset-flow', // Important pour certains modules Expo
-      ],
+      // C'EST ICI LA MAGIE : On utilise le preset officiel React Native
+      // Il contient déjà "export-namespace-from", "class-properties", etc.
+      presets: ['module:metro-react-native-babel-preset'],
       plugins: [
         ['react-native-web', { commonjs: true }],
-        '@babel/plugin-proposal-export-namespace-from',
-        // On ajoute ce plugin pour gérer les propriétés de classe dans les vieilles libs
-        ['@babel/plugin-proposal-class-properties', { loose: true }],
-        ['@babel/plugin-proposal-private-methods', { loose: true }],
-        ['@babel/plugin-proposal-private-property-in-object', { loose: true }]
       ],
     },
   },
@@ -81,7 +66,6 @@ module.exports = {
         test: /\.(jpg|png|woff|woff2|eot|ttf|svg)$/,
         type: 'asset/resource'
       },
-      // Règle spéciale pour forcer le chargement des polices d'icônes
       {
         test: /\.ttf$/,
         loader: 'url-loader', 
