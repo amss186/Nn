@@ -1,27 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Platform,
+  View, Text, StyleSheet, TouchableOpacity,
+  TextInput, Platform
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { signupWithEmail, loginWithEmail, requestPasswordReset } from '../services/authService';
+import {
+  signupWithEmail,
+  loginWithEmail,
+  requestPasswordReset
+} from '../services/authService';
 import useWalletStore from '../store/walletStore';
 import GoogleButton from './components/GoogleButton';
+
+import { useNavigation } from '@react-navigation/native';
 
 type Mode = 'signup' | 'login' | 'reset';
 
 function AuthScreen() {
+  const navigation = useNavigation();
   const [mode, setMode] = useState<Mode>('signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const createWallet = useWalletStore((state) => state.actions.createWallet);
+  const createWallet = useWalletStore((s) => s.actions.createWallet);
+  const checkStorage = useWalletStore((s) => s.actions.checkStorage);
+
+  // Après un succès, on re-scanne le storage pour que App.tsx redirige
+  const triggerFlowRefresh = () => {
+    checkStorage();
+    // App.tsx détectera et redirigera
+  };
 
   const handleSignup = async () => {
     if (!email || !password || !confirmPassword) {
@@ -29,21 +39,29 @@ function AuthScreen() {
       return;
     }
     if (password !== confirmPassword) {
-      Toast.show({ type: 'error', text1: 'Mots de passe différents', text2: 'Les mots de passe ne correspondent pas.' });
+      Toast.show({ type: 'error', text1: 'Mots de passe différents', text2: 'Ils ne correspondent pas.' });
       return;
     }
     setIsLoading(true);
     try {
-      await signupWithEmail(email.trim(), password);
-      Toast.show({ type: 'success', text1: 'Compte créé', text2: 'Un email de vérification a été envoyé.' });
-      // créer wallet localement (web : password -> demo storage)
+      const user = await signupWithEmail(email.trim(), password);
+      Toast.show({
+        type: 'success',
+        text1: 'Compte créé',
+        text2: 'Email de vérification envoyé.'
+      });
+
+      // On crée le wallet de suite (web: password obligatoire)
       if (Platform.OS === 'web') {
         await createWallet(password);
       } else {
         await createWallet();
       }
+
+      triggerFlowRefresh();
+      // Si email pas encore vérifié, on reste ici mais on propose de recharger une fois vérifié
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Erreur', text2: err?.message || "Impossible de créer le compte." });
+      Toast.show({ type: 'error', text1: 'Erreur', text2: err?.message || "Création impossible." });
     } finally {
       setIsLoading(false);
     }
@@ -51,20 +69,24 @@ function AuthScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Toast.show({ type: 'error', text1: 'Champs manquants', text2: 'Email et mot de passe sont requis.' });
+      Toast.show({ type: 'error', text1: 'Champs manquants', text2: 'Email + mot de passe requis.' });
       return;
     }
     setIsLoading(true);
     try {
       const user = await loginWithEmail(email.trim(), password);
       if (!user.emailVerified) {
-        Toast.show({ type: 'info', text1: 'Email non vérifié', text2: 'Vérifie ta boîte mail avant de continuer.' });
+        Toast.show({
+          type: 'info',
+          text1: 'Email non vérifié',
+          text2: 'Clique le lien reçu puis reviens ici.'
+        });
       } else {
         Toast.show({ type: 'success', text1: 'Connecté', text2: `Bienvenue ${user.email}` });
-        // leave navigation / unlock logic to App.tsx (observeAuthState)
       }
+      triggerFlowRefresh();
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Erreur de connexion', text2: err?.message || 'Identifiants invalides.' });
+      Toast.show({ type: 'error', text1: 'Connexion impossible', text2: err?.message || 'Identifiants invalides.' });
     } finally {
       setIsLoading(false);
     }
@@ -72,15 +94,15 @@ function AuthScreen() {
 
   const handleReset = async () => {
     if (!email) {
-      Toast.show({ type: 'error', text1: 'Email requis', text2: 'Veuillez entrer votre email.' });
+      Toast.show({ type: 'error', text1: 'Email requis', text2: 'Indique ton email' });
       return;
     }
     setIsLoading(true);
     try {
       await requestPasswordReset(email.trim());
-      Toast.show({ type: 'success', text1: 'Email envoyé', text2: 'Si un compte existe, un lien de réinitialisation a été envoyé.' });
+      Toast.show({ type: 'success', text1: 'Email envoyé', text2: 'Si un compte existe, lien envoyé.' });
     } catch (err: any) {
-      Toast.show({ type: 'error', text1: 'Erreur', text2: err?.message || 'Impossible d’envoyer l’email.' });
+      Toast.show({ type: 'error', text1: 'Erreur', text2: err?.message || 'Envoi impossible.' });
     } finally {
       setIsLoading(false);
     }
@@ -91,22 +113,44 @@ function AuthScreen() {
       return (
         <View style={styles.formContainer}>
           <Text style={styles.label}>Email</Text>
-          <TextInput style={styles.input} placeholder="email@exemple.com" placeholderTextColor="#8B92A6" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+          <TextInput
+            style={styles.input}
+            placeholder="email@exemple.com"
+            placeholderTextColor="#8B92A6"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
           <Text style={styles.label}>Mot de passe</Text>
-          <TextInput style={styles.input} placeholder="Mot de passe" placeholderTextColor="#8B92A6" value={password} onChangeText={setPassword} secureTextEntry />
-          <Text style={styles.label}>Confirmer le mot de passe</Text>
-          <TextInput style={styles.input} placeholder="Confirmez le mot de passe" placeholderTextColor="#8B92A6" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry />
-          <TouchableOpacity style={[styles.button, isLoading && styles.buttonDisabled]} onPress={handleSignup} disabled={isLoading}>
+          <TextInput
+            style={styles.input}
+            placeholder="Mot de passe"
+            placeholderTextColor="#8B92A6"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+          <Text style={styles.label}>Confirme mot de passe</Text>
+            <TextInput
+            style={styles.input}
+            placeholder="Confirmez"
+            placeholderTextColor="#8B92A6"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+          />
+          <TouchableOpacity
+            style={[styles.button, isLoading && styles.buttonDisabled]}
+            onPress={handleSignup}
+            disabled={isLoading}
+          >
             <Text style={styles.buttonText}>{isLoading ? 'Création...' : 'Créer mon compte'}</Text>
           </TouchableOpacity>
-          
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>OU</Text>
-            <View style={styles.divider} />
-          </View>
 
-          {Platform.OS === 'web' && <GoogleButton />}
+          <Divider />
+
+          {Platform.OS === 'web' && <GoogleButton onAfterSuccess={triggerFlowRefresh} />}
         </View>
       );
     }
@@ -114,20 +158,35 @@ function AuthScreen() {
       return (
         <View style={styles.formContainer}>
           <Text style={styles.label}>Email</Text>
-          <TextInput style={styles.input} placeholder="email@exemple.com" placeholderTextColor="#8B92A6" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+          <TextInput
+            style={styles.input}
+            placeholder="email@exemple.com"
+            placeholderTextColor="#8B92A6"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
           <Text style={styles.label}>Mot de passe</Text>
-          <TextInput style={styles.input} placeholder="Mot de passe" placeholderTextColor="#8B92A6" value={password} onChangeText={setPassword} secureTextEntry />
-          <TouchableOpacity style={[styles.button, isLoading && styles.buttonDisabled]} onPress={handleLogin} disabled={isLoading}>
+          <TextInput
+            style={styles.input}
+            placeholder="Mot de passe"
+            placeholderTextColor="#8B92A6"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+          <TouchableOpacity
+            style={[styles.button, isLoading && styles.buttonDisabled]}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
             <Text style={styles.buttonText}>{isLoading ? 'Connexion...' : 'Se connecter'}</Text>
           </TouchableOpacity>
-          
-          <View style={styles.dividerContainer}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>OU</Text>
-            <View style={styles.divider} />
-          </View>
 
-          {Platform.OS === 'web' && <GoogleButton />}
+          <Divider />
+
+          {Platform.OS === 'web' && <GoogleButton onAfterSuccess={triggerFlowRefresh} />}
         </View>
       );
     }
@@ -135,9 +194,21 @@ function AuthScreen() {
     return (
       <View style={styles.formContainer}>
         <Text style={styles.label}>Email</Text>
-        <TextInput style={styles.input} placeholder="email@exemple.com" placeholderTextColor="#8B92A6" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TouchableOpacity style={[styles.button, isLoading && styles.buttonDisabled]} onPress={handleReset} disabled={isLoading}>
-          <Text style={styles.buttonText}>{isLoading ? 'Envoi...' : 'Envoyer un email de réinitialisation'}</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="email@exemple.com"
+          placeholderTextColor="#8B92A6"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+        <TouchableOpacity
+          style={[styles.button, isLoading && styles.buttonDisabled]}
+          onPress={handleReset}
+          disabled={isLoading}
+        >
+          <Text style={styles.buttonText}>{isLoading ? 'Envoi...' : 'Envoyer lien de réinitialisation'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -147,11 +218,34 @@ function AuthScreen() {
     <View style={styles.container}>
       <View style={styles.logoContainer}><Text style={styles.logo}>🦊</Text><Text style={styles.brandName}>Malin Wallet</Text></View>
       <View style={styles.modeTabs}>
-        <TouchableOpacity style={[styles.modeTab, mode === 'signup' && styles.modeTabActive]} onPress={() => setMode('signup')}><Text style={[styles.modeTabText, mode === 'signup' && styles.modeTabTextActive]}>Créer un compte</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.modeTab, mode === 'login' && styles.modeTabActive]} onPress={() => setMode('login')}><Text style={[styles.modeTabText, mode === 'login' && styles.modeTabTextActive]}>Se connecter</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.modeTab, mode === 'reset' && styles.modeTabActive]} onPress={() => setMode('reset')}><Text style={[styles.modeTabText, mode === 'reset' && styles.modeTabTextActive]}>Mot de passe oublié</Text></TouchableOpacity>
+        <TabButton active={mode === 'signup'} label="Inscription" onPress={() => setMode('signup')} />
+        <TabButton active={mode === 'login'}  label="Connexion"  onPress={() => setMode('login')} />
+        <TabButton active={mode === 'reset'}  label="Reset"      onPress={() => setMode('reset')} />
       </View>
       {renderForm()}
+      <View style={{ marginTop: 20 }}>
+        <Text style={styles.helperText}>
+          Une fois ton email vérifié, reviens ou rafraîchis: tu seras redirigé automatiquement vers ton portefeuille ou la création.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function TabButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={[styles.modeTab, active && styles.modeTabActive]} onPress={onPress}>
+      <Text style={[styles.modeTabText, active && styles.modeTabTextActive]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function Divider() {
+  return (
+    <View style={styles.dividerContainer}>
+      <View style={styles.divider} />
+      <Text style={styles.dividerText}>OU</Text>
+      <View style={styles.divider} />
     </View>
   );
 }
@@ -168,13 +262,17 @@ const styles = StyleSheet.create({
   modeTabTextActive: { color: '#FFFFFF' },
   formContainer: { marginTop: 10 },
   label: { fontSize: 14, color: '#D6D9DC', marginBottom: 8, fontWeight: '600' },
-  input: { backgroundColor: '#141618', borderRadius: 8, padding: 12, fontSize: 16, color: '#FFFFFF', marginBottom: 16, borderWidth: 1, borderColor: '#3C4043' },
+  input: {
+    backgroundColor: '#141618', borderRadius: 8, padding: 12,
+    fontSize: 16, color: '#FFFFFF', marginBottom: 16, borderWidth: 1, borderColor: '#3C4043'
+  },
   button: { backgroundColor: '#037DD6', paddingVertical: 14, borderRadius: 999, alignItems: 'center', marginBottom: 10 },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
   dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
   divider: { flex: 1, height: 1, backgroundColor: '#3C4043' },
   dividerText: { color: '#8B92A6', fontSize: 13, marginHorizontal: 12, fontWeight: '500' },
+  helperText: { color: '#8B92A6', fontSize: 12, textAlign: 'center', lineHeight: 16 }
 });
 
 export default AuthScreen;
