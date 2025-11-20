@@ -35,7 +35,7 @@ function SwapScreen() {
     setIsSwapping(true);
     try {
       const provider = new ethers.providers.JsonRpcProvider(currentNetwork.rpcUrl);
-      const wallet = ethers.Wallet.fromMnemonic(mnemonic);
+      const wallet = ethers.Wallet.fromMnemonic(mnemonic); // FIX ICI
       const connectedWallet = wallet.connect(provider);
 
       const txValue = ethers.utils.parseEther(amount);
