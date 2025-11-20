@@ -58,7 +58,7 @@ module.exports = {
     alias: {
       'react-native$': 'react-native-web',
       'react-native-keychain': path.resolve(appDirectory, 'keychain.mock.js'),
-      // Active le shim abitype SI nécessaire (décommente si erreurs persistent)
+      // Décommente cette ligne si les erreurs abitype persistent :
       // 'abitype': path.resolve(appDirectory, 'abitype-shim.js'),
     },
     fallback: {
