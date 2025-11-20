@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import { ethers } from 'ethers';
-import * as Keychain from 'react-native-keychain';
-import { Alchemy } from 'alchemy-sdk';
 import { Platform } from 'react-native';
+import { Alchemy } from 'alchemy-sdk';
 import {
   encryptMnemonic,
   decryptMnemonic,
@@ -10,6 +9,13 @@ import {
   loadEncryptedMnemonic,
   clearEncryptedMnemonic,
 } from '../utils/secureStorage';
+
+// Import Keychain uniquement si natif
+let Keychain = null;
+if (Platform.OS !== 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Keychain = require('react-native-keychain');
+}
 
 const webStorage = {
   getItem: (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null),
@@ -66,13 +72,12 @@ const useWalletStore = create((set, get) => ({
         let encryptedPayload = null;
 
         if (Platform.OS === 'web') {
-          const payload = loadEncryptedMnemonic();
-          encryptedPayload = payload;
+          encryptedPayload = loadEncryptedMnemonic();
           const legacyMnemonic = webStorage.getItem('wallet_mnemonic');
-          if (payload || legacyMnemonic) walletExists = true;
+          if (encryptedPayload || legacyMnemonic) walletExists = true;
           needsBackup = localStorage.getItem('wallet_needsBackup') === 'true';
           hasBackedUp = localStorage.getItem('wallet_hasBackedUp') === 'true';
-        } else {
+        } else if (Keychain) {
           const credentials = await Keychain.getGenericPassword();
           walletExists = !!credentials;
           needsBackup = walletExists ? true : false;
@@ -84,7 +89,7 @@ const useWalletStore = create((set, get) => ({
           hasBackedUp,
           encryptedMnemonicPayload: encryptedPayload,
         });
-      } catch (e) {
+      } catch {
         set({ isWalletCreated: false });
       }
     },
@@ -100,18 +105,18 @@ const useWalletStore = create((set, get) => ({
             storeEncryptedMnemonic(payload);
             set({ encryptedMnemonicPayload: payload, securityLevel: 'strong' });
           } else {
-            webStorage.setItem('wallet_mnemonic', phrase);
+            webStorage.setItem('wallet_mnemonic', phrase); // Optionnel, tu peux décider de refuser création sans password
             set({ securityLevel: 'weak' });
           }
           localStorage.setItem('wallet_needsBackup', 'true');
           localStorage.setItem('wallet_hasBackedUp', 'false');
-        } catch (e) {
+        } catch {
           webStorage.setItem('wallet_mnemonic', phrase);
           localStorage.setItem('wallet_needsBackup', 'true');
           localStorage.setItem('wallet_hasBackedUp', 'false');
           set({ securityLevel: 'weak' });
         }
-      } else {
+      } else if (Keychain) {
         await Keychain.setGenericPassword('wallet', phrase, {
           accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_ANY_OR_DEVICE_PASSCODE,
         });
@@ -133,7 +138,6 @@ const useWalletStore = create((set, get) => ({
       try {
         const wallet = ethers.Wallet.fromMnemonic(mnemonic.trim());
         const address = wallet.address;
-
         if (Platform.OS === 'web') {
           try {
             if (passwordForLocalEncryption) {
@@ -146,13 +150,13 @@ const useWalletStore = create((set, get) => ({
             }
             localStorage.setItem('wallet_needsBackup', 'false');
             localStorage.setItem('wallet_hasBackedUp', 'true');
-          } catch (e) {
+          } catch {
             webStorage.setItem('wallet_mnemonic', mnemonic.trim());
             localStorage.setItem('wallet_needsBackup', 'false');
             localStorage.setItem('wallet_hasBackedUp', 'true');
             set({ securityLevel: 'weak' });
           }
-        } else {
+        } else if (Keychain) {
           await Keychain.setGenericPassword('wallet', mnemonic.trim(), {
             accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_ANY_OR_DEVICE_PASSCODE,
           });
@@ -192,7 +196,6 @@ const useWalletStore = create((set, get) => ({
         if (Platform.OS === 'web') {
           const payload = get().encryptedMnemonicPayload;
           const legacyMnemonic = webStorage.getItem('wallet_mnemonic');
-
           if (payload) {
             const phrase = await decryptMnemonic(payload, password);
             const wallet = ethers.Wallet.fromMnemonic(phrase);
@@ -205,15 +208,16 @@ const useWalletStore = create((set, get) => ({
             return true;
           }
           throw new Error('Aucun portefeuille trouvé');
+        } else if (Keychain) {
+          const credentials = await Keychain.getGenericPassword({
+            authenticationPrompt: { title: 'Déverrouiller le portefeuille' },
+          });
+          if (!credentials) throw new Error('Authentification annulée');
+          const wallet = ethers.Wallet.fromMnemonic(credentials.password);
+          set({ mnemonic: credentials.password, address: wallet.address, isWalletUnlocked: true });
+          return true;
         }
-
-        const credentials = await Keychain.getGenericPassword({
-          authenticationPrompt: { title: 'Déverrouiller le portefeuille' },
-        });
-        if (!credentials) throw new Error('Authentification annulée');
-        const wallet = ethers.Wallet.fromMnemonic(credentials.password);
-        set({ mnemonic: credentials.password, address: wallet.address, isWalletUnlocked: true });
-        return true;
+        throw new Error('Plateforme non supportée');
       } catch (e) {
         throw e;
       }
@@ -223,7 +227,7 @@ const useWalletStore = create((set, get) => ({
 
     wipeWallet: async () => {
       clearEncryptedMnemonic();
-      await Keychain.resetGenericPassword();
+      if (Keychain) await Keychain.resetGenericPassword();
       if (Platform.OS === 'web') {
         localStorage.removeItem('wallet_needsBackup');
         localStorage.removeItem('wallet_hasBackedUp');
@@ -250,15 +254,14 @@ const useWalletStore = create((set, get) => ({
       try {
         const { address, currentNetwork } = get();
         if (!address) return;
-        const settings = { apiKey: '6E1MABBp0KS-gBCc5zXk7', network: currentNetwork.alchemyNetwork };
-        const alchemy = new Alchemy(settings);
+        const alchemy = new Alchemy({ apiKey: '6E1MABBp0KS-gBCc5zXk7', network: currentNetwork.alchemyNetwork });
 
         const balanceWei = await alchemy.core.getBalance(address);
         const balanceEth = ethers.utils.formatEther(balanceWei);
 
         const tokenBalancesResponse = await alchemy.core.getTokenBalances(address);
         const tokensWithBalance = tokenBalancesResponse.tokenBalances.filter(
-          (t) => t.tokenBalance !== '0' && t.tokenBalance,
+          (t) => t.tokenBalance && t.tokenBalance !== '0',
         );
 
         const metadataPromises = tokensWithBalance.map((t) =>
@@ -271,7 +274,7 @@ const useWalletStore = create((set, get) => ({
             const meta = metadataList[i];
             if (!meta.symbol) return null;
             const rawStr = t.tokenBalance;
-            let raw = rawStr.startsWith('0x') ? parseInt(rawStr, 16) : Number(rawStr);
+            const raw = rawStr.startsWith('0x') ? parseInt(rawStr, 16) : Number(rawStr);
             const decimals = meta.decimals || 18;
             const bal = raw / Math.pow(10, decimals);
             return {
@@ -303,8 +306,9 @@ const useWalletStore = create((set, get) => ({
           maxCount: 20,
         });
 
-        const allTransfers = [...sentTransfers.transfers, ...receivedTransfers.transfers]
-          .sort((a, b) => new Date(b.metadata.blockTimestamp) - new Date(a.metadata.blockTimestamp));
+        const allTransfers = [...sentTransfers.transfers, ...receivedTransfers.transfers].sort(
+          (a, b) => new Date(b.metadata.blockTimestamp) - new Date(a.metadata.blockTimestamp),
+        );
 
         set({
           balance: balanceEth,
@@ -316,10 +320,16 @@ const useWalletStore = create((set, get) => ({
       }
     },
 
-    setScreen: (screenName, asset = null) => set({ currentScreen: screenName, assetToSend: asset }),
+    setScreen: (screenName, asset = null) =>
+      set({ currentScreen: screenName, assetToSend: asset }),
 
     switchNetwork: (network) =>
-      set({ currentNetwork: network, balance: '0', tokenBalances: [], transactions: [] }),
+      set({
+        currentNetwork: network,
+        balance: '0',
+        tokenBalances: [],
+        transactions: [],
+      }),
 
     sendTransaction: async (toAddress, amount) => {
       set({ isSending: true, sendError: null });
