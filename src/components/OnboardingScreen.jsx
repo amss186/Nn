@@ -1,50 +1,51 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Platform,
-  ScrollView,
+  View, Text, StyleSheet, TouchableOpacity,
+  TextInput, Platform, ScrollView
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { ethers } from 'ethers';
 import useWalletStore from '../store/walletStore';
 import { auth } from '../firebaseConfig';
 import { linkWalletAddressToUser } from '../services/authService';
+import { useNavigation } from '@react-navigation/native';
 
 function OnboardingScreen() {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPasswordInput, setShowPasswordInput] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [showImportInput, setShowImportInput] = useState(false);
-  const [mnemonic, setMnemonic] = useState('');
+  const navigation = useNavigation();
 
-  const createWallet = useWalletStore((state) => state.actions.createWallet);
-  const importWalletFromMnemonic = useWalletStore(
-    (state) => state.actions.importWalletFromMnemonic,
-  );
+  const [password, setPassword]           = useState('');
+  const [confirmPassword, setConfirm]     = useState('');
+  const [showPasswordInput, setShowPwd]   = useState(false);
+  const [isCreating, setIsCreating]       = useState(false);
+  const [showImportInput, setShowImport]  = useState(false);
+  const [mnemonic, setMnemonic]           = useState('');
+
+  const createWallet             = useWalletStore((s) => s.actions.createWallet);
+  const importWalletFromMnemonic = useWalletStore((s) => s.actions.importWalletFromMnemonic);
+  const verifyBackup             = useWalletStore((s) => s.actions.verifyBackup);
+  const needsBackup              = useWalletStore((s) => s.needsBackup);
+
+  // Navigation helper
+  const goNextFlow = () => {
+    // App.tsx fera aussi redirection, mais on anticipe pour confort:
+    if (needsBackup) {
+      navigation.navigate('Backup');
+    } else {
+      navigation.navigate('Locked'); // créé mais pas déverrouillé
+    }
+  };
 
   const handleCreateWallet = async () => {
     if (Platform.OS === 'web') {
-      setShowPasswordInput(true);
+      setShowPwd(true);
     } else {
       try {
         setIsCreating(true);
         await createWallet();
-        Toast.show({
-          type: 'success',
-          text1: 'Portefeuille créé',
-          text2: 'Votre portefeuille a été créé avec succès',
-        });
-      } catch (error) {
-        Toast.show({
-          type: 'error',
-          text1: 'Erreur',
-          text2: error?.message || 'Impossible de créer le portefeuille',
-        });
+        Toast.show({ type: 'success', text1: 'Portefeuille créé', text2: 'Succès' });
+        goNextFlow();
+      } catch (e: any) {
+        Toast.show({ type: 'error', text1: 'Erreur', text2: e?.message || 'Création impossible' });
       } finally {
         setIsCreating(false);
       }
@@ -53,127 +54,72 @@ function OnboardingScreen() {
 
   const handleConfirmPassword = async () => {
     if (!password || password.length < 4) {
-      Toast.show({
-        type: 'error',
-        text1: 'Mot de passe trop court',
-        text2: 'Le mot de passe doit contenir au moins 4 caractères',
-      });
+      Toast.show({ type: 'error', text1: 'Mot de passe trop court', text2: '>=4 caractères' });
       return;
     }
-
     if (password !== confirmPassword) {
-      Toast.show({
-        type: 'error',
-        text1: 'Mots de passe différents',
-        text2: 'Les mots de passe ne correspondent pas',
-      });
+      Toast.show({ type: 'error', text1: 'Différence', text2: 'Les mots de passe ne correspondent pas' });
       return;
     }
-
     try {
       setIsCreating(true);
       await createWallet(password);
-      Toast.show({
-        type: 'success',
-        text1: 'Portefeuille créé',
-        text2: 'Votre portefeuille a été créé avec succès',
-      });
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: error?.message || 'Impossible de créer le portefeuille',
-      });
+      Toast.show({ type: 'success', text1: 'Portefeuille créé', text2: 'Chiffré avec succès' });
+      goNextFlow();
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Erreur', text2: e?.message || 'Création impossible' });
     } finally {
       setIsCreating(false);
     }
   };
 
   const handleImportWallet = () => {
-    setShowImportInput(true);
-    setShowPasswordInput(false);
+    setShowImport(true);
+    setShowPwd(false);
   };
 
   const handleConfirmImport = async () => {
-    const trimmedMnemonic = mnemonic.trim();
-    
-    if (!trimmedMnemonic) {
-      Toast.show({
-        type: 'error',
-        text1: 'Mnemonic requise',
-        text2: 'Veuillez entrer votre phrase de récupération.',
-      });
+    const trimmed = mnemonic.trim();
+    if (!trimmed) {
+      Toast.show({ type: 'error', text1: 'Mnemonic requise', text2: 'Entre ta phrase' });
       return;
     }
-
-    // Validate word count (12 or 24 words)
-    const words = trimmedMnemonic.split(/\s+/);
+    const words = trimmed.split(/\s+/);
     if (words.length !== 12 && words.length !== 24) {
-      Toast.show({
-        type: 'error',
-        text1: 'Mnemonic invalide',
-        text2: 'La phrase doit contenir 12 ou 24 mots.',
-      });
+      Toast.show({ type: 'error', text1: 'Format invalide', text2: '12 ou 24 mots' });
       return;
     }
-
-    // On web, require password for demo encryption
     if (Platform.OS === 'web' && !password) {
-      Toast.show({
-        type: 'error',
-        text1: 'Mot de passe requis',
-        text2: 'Entrez un mot de passe pour sécuriser votre wallet.',
-      });
+      Toast.show({ type: 'error', text1: 'Mot de passe requis', text2: 'Pour chiffrement local demo.' });
       return;
     }
 
-    // Validate mnemonic
+    // Validation ethers v5
     try {
-      ethers.Wallet.fromPhrase(trimmedMnemonic);
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Mnemonic invalide',
-        text2: 'La phrase de récupération est incorrecte.',
-      });
+      ethers.Wallet.fromMnemonic(trimmed);
+    } catch {
+      Toast.show({ type: 'error', text1: 'Mnemonic invalide', text2: 'Vérifie chaque mot.' });
       return;
     }
 
     try {
       setIsCreating(true);
-      // Import wallet using store action
-      const walletAddress = await importWalletFromMnemonic(
-        trimmedMnemonic,
-        password || undefined,
-      );
-
-      // If user is signed in with Firebase, link wallet address
-      const currentUser = auth.currentUser;
-      if (currentUser) {
-        await linkWalletAddressToUser(currentUser.uid, walletAddress);
+      const address = await importWalletFromMnemonic(trimmed, password || undefined);
+      const user = auth.currentUser;
+      if (user) {
+        await linkWalletAddressToUser(user.uid, address);
       }
-
-      Toast.show({
-        type: 'success',
-        text1: 'Wallet importé',
-        text2: 'Vous pouvez maintenant utiliser votre wallet.',
-      });
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur d\'importation',
-        text2: error?.message || 'Impossible d\'importer le wallet.',
-      });
+      Toast.show({ type: 'success', text1: 'Wallet importé', text2: 'Adresse liée.' });
+      goNextFlow();
+    } catch (e: any) {
+      Toast.show({ type: 'error', text1: 'Erreur import', text2: e?.message || 'Impossible.' });
     } finally {
       setIsCreating(false);
     }
   };
 
   return (
-    <ScrollView 
-      contentContainerStyle={styles.scrollContainer}
-      style={{ flex: 1, backgroundColor: '#24272A' }}
-    >
+    <ScrollView contentContainerStyle={styles.scrollContainer} style={{ flex: 1, backgroundColor: '#24272A' }}>
       <View style={styles.container}>
         <View style={styles.logoContainer}>
           <Text style={styles.logo}>🦊</Text>
@@ -185,16 +131,16 @@ function OnboardingScreen() {
           {showImportInput
             ? 'Importez votre portefeuille existant'
             : showPasswordInput
-            ? 'Créez un mot de passe pour sécuriser votre portefeuille'
-            : 'Créez votre portefeuille sécurisé pour les testnets'}
+              ? 'Crée un mot de passe pour sécuriser ton portefeuille'
+              : 'Crée ou importe un portefeuille testnet sécurisé'}
         </Text>
 
         {showImportInput ? (
           <View style={styles.formContainer}>
-            <Text style={styles.label}>Phrase de récupération (12 ou 24 mots)</Text>
+            <Text style={styles.label}>Mnemonic (12 ou 24 mots)</Text>
             <TextInput
               style={styles.mnemonicInput}
-              placeholder="Entrez votre phrase de récupération séparée par des espaces"
+              placeholder="mots séparés par des espaces"
               placeholderTextColor="#8B92A6"
               value={mnemonic}
               onChangeText={setMnemonic}
@@ -203,19 +149,17 @@ function OnboardingScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
-
             {Platform.OS === 'web' && (
               <>
-                <Text style={styles.label}>Mot de passe (pour chiffrement local)</Text>
+                <Text style={styles.label}>Mot de passe (chiffrement local)</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="Entrez votre mot de passe"
+                  placeholder="Mot de passe"
                   placeholderTextColor="#8B92A6"
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
                   autoCapitalize="none"
-                  autoCorrect={false}
                 />
               </>
             )}
@@ -223,8 +167,7 @@ function OnboardingScreen() {
             <View style={styles.warningBox}>
               <Text style={styles.warningIcon}>⚠️</Text>
               <Text style={styles.warningText}>
-                Votre phrase ne sera JAMAIS envoyée au serveur. Seule l&apos;adresse publique
-                sera stockée. La phrase est chiffrée localement.
+                La phrase n'est jamais envoyée. L'adresse publique peut être liée à ton compte.
               </Text>
             </View>
 
@@ -233,15 +176,13 @@ function OnboardingScreen() {
               onPress={handleConfirmImport}
               disabled={isCreating}
             >
-              <Text style={styles.buttonText}>
-                {isCreating ? 'Importation...' : 'Importer mon portefeuille'}
-              </Text>
+              <Text style={styles.buttonText}>{isCreating ? 'Importation...' : 'Importer mon portefeuille'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => {
-                setShowImportInput(false);
+                setShowImport(false);
                 setMnemonic('');
                 setPassword('');
               }}
@@ -255,51 +196,38 @@ function OnboardingScreen() {
             <Text style={styles.label}>Mot de passe</Text>
             <TextInput
               style={styles.input}
-              placeholder="Entrez votre mot de passe"
+              placeholder="Mot de passe"
               placeholderTextColor="#8B92A6"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
               autoCapitalize="none"
-              autoCorrect={false}
             />
-
-            <Text style={styles.label}>Confirmer le mot de passe</Text>
+            <Text style={styles.label}>Confirmer mot de passe</Text>
             <TextInput
               style={styles.input}
-              placeholder="Confirmez votre mot de passe"
+              placeholder="Confirmer"
               placeholderTextColor="#8B92A6"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={setConfirm}
               secureTextEntry
               autoCapitalize="none"
-              autoCorrect={false}
             />
-
-            <View style={styles.warningBox}>
-              <Text style={styles.warningIcon}>⚠️</Text>
-              <Text style={styles.warningText}>
-                DEMO UNIQUEMENT : ce système de mot de passe n&apos;est pas sécurisé pour la
-                production. Utilisez-le uniquement pour les tests.
-              </Text>
-            </View>
 
             <TouchableOpacity
               style={[styles.button, isCreating && styles.buttonDisabled]}
               onPress={handleConfirmPassword}
               disabled={isCreating}
             >
-              <Text style={styles.buttonText}>
-                {isCreating ? 'Création...' : 'Créer mon portefeuille'}
-              </Text>
+              <Text style={styles.buttonText}>{isCreating ? 'Création...' : 'Créer mon portefeuille'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={() => {
-                setShowPasswordInput(false);
+                setShowPwd(false);
                 setPassword('');
-                setConfirmPassword('');
+                setConfirm('');
               }}
               disabled={isCreating}
             >
@@ -313,9 +241,7 @@ function OnboardingScreen() {
               onPress={handleCreateWallet}
               disabled={isCreating}
             >
-              <Text style={styles.buttonText}>
-                {isCreating ? 'Création...' : 'Créer mon portefeuille'}
-              </Text>
+              <Text style={styles.buttonText}>{isCreating ? 'Création...' : 'Créer mon portefeuille'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -333,125 +259,45 @@ function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  container: {
-    width: '100%',
-    maxWidth: 500,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
-  },
-  logo: {
-    fontSize: 80,
-    marginBottom: 15,
-  },
-  brandName: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#FFFFFF',
-  },
+  scrollContainer: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  container: { width: '100%', maxWidth: 500, justifyContent: 'center', alignItems: 'center' },
+  logoContainer: { alignItems: 'center', marginBottom: 30 },
+  logo: { fontSize: 80, marginBottom: 15 },
+  brandName: { fontSize: 32, fontWeight: 'bold', color: '#FFFFFF' },
+  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 10, color: '#FFFFFF' },
   subtitle: {
-    fontSize: 16,
-    color: '#8B92A6',
-    marginBottom: 40,
-    textAlign: 'center',
-    paddingHorizontal: 20,
+    fontSize: 16, color: '#8B92A6', marginBottom: 40,
+    textAlign: 'center', paddingHorizontal: 20
   },
-  formContainer: {
-    width: '100%',
-    maxWidth: 400,
-  },
-  label: {
-    fontSize: 14,
-    color: '#D6D9DC',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
+  formContainer: { width: '100%', maxWidth: 400 },
+  label: { fontSize: 14, color: '#D6D9DC', marginBottom: 8, fontWeight: '600' },
   input: {
-    backgroundColor: '#141618',
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#3C4043',
+    backgroundColor: '#141618', borderRadius: 8, padding: 15,
+    fontSize: 16, color: '#FFFFFF', marginBottom: 20, borderWidth: 1, borderColor: '#3C4043'
   },
   mnemonicInput: {
-    backgroundColor: '#141618',
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#3C4043',
-    minHeight: 100,
-    textAlignVertical: 'top',
+    backgroundColor: '#141618', borderRadius: 8, padding: 15,
+    fontSize: 16, color: '#FFFFFF', marginBottom: 20, borderWidth: 1, borderColor: '#3C4043',
+    minHeight: 100, textAlignVertical: 'top'
   },
   button: {
-    backgroundColor: '#037DD6',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 100,
-    alignItems: 'center',
-    marginBottom: 15,
+    backgroundColor: '#037DD6', paddingVertical: 15, paddingHorizontal: 40,
+    borderRadius: 100, alignItems: 'center', marginBottom: 15
   },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   secondaryButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 100,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#037DD6',
+    backgroundColor: 'transparent', paddingVertical: 15, paddingHorizontal: 40,
+    borderRadius: 100, alignItems: 'center', borderWidth: 2, borderColor: '#037DD6'
   },
-  secondaryButtonText: {
-    color: '#037DD6',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  secondaryButtonText: { color: '#037DD6', fontSize: 16, fontWeight: '600' },
   warningBox: {
-    flexDirection: 'row',
-    backgroundColor: '#3D2E1F',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#F7931A',
+    flexDirection: 'row', backgroundColor: '#3D2E1F',
+    borderRadius: 10, padding: 15, marginBottom: 20,
+    borderWidth: 1, borderColor: '#F7931A'
   },
-  warningIcon: {
-    fontSize: 20,
-    marginRight: 10,
-  },
-  warningText: {
-    flex: 1,
-    color: '#F7931A',
-    fontSize: 12,
-    lineHeight: 18,
-  },
+  warningIcon: { fontSize: 20, marginRight: 10 },
+  warningText: { flex: 1, color: '#F7931A', fontSize: 12, lineHeight: 18 },
 });
 
 export default OnboardingScreen;
