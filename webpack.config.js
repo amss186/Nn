@@ -1,123 +1,28 @@
-const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const webpack = require('webpack');
-
-const appDirectory = path.resolve(__dirname);
-
-// Liste des modules qui DOIVENT être compilés par Babel
-const compileNodeModules = [
-  'react-native',
-  '@react-native',
-  '@expo',
-  'expo',
-  'nativewind',
-  'react-native-paper',
-  'react-native-vector-icons',
-  'react-native-safe-area-context',
-  'react-native-svg',
-  'react-native-qrcode-svg',
-  'react-native-toast-message',
-  'react-native-screens',
-  '@react-navigation',
-  'alchemy-sdk',
-  'firebase',
-  '@walletconnect',
-  '@json-rpc-tools',
-  'eventemitter3'
-];
-
-const babelLoaderConfiguration = {
-  test: /\.(js|jsx|ts|tsx)$/,
-  include: (input) => {
-    // Toujours compiler le code source
-    if (!input.includes('node_modules')) return true;
-    // Compiler les modules de la liste blanche
-    return compileNodeModules.some(m => input.includes(m));
-  },
-  use: {
-    loader: 'babel-loader',
-    options: {
-      cacheDirectory: true,
-      babelrc: false,
-      configFile: false,
-      presets: [
-        ['module:metro-react-native-babel-preset']
-      ],
-      plugins: [
-        ['react-native-web', { commonjs: true }],
-        // --- PLUGINS DE COMPATIBILITÉ AJOUTÉS ---
-        ['@babel/plugin-proposal-export-namespace-from'],
-        ['@babel/plugin-proposal-class-properties', { loose: true }],
-        ['@babel/plugin-proposal-private-methods', { loose: true }],
-        ['@babel/plugin-proposal-private-property-in-object', { loose: true }]
-      ],
-    },
-  },
-};
+const path = require("path");
+const webpack = require("webpack");
 
 module.exports = {
-  entry: {
-    app: path.join(appDirectory, 'index.web.js'),
-  },
+  entry: "./index.web.js",
   output: {
-    path: path.resolve(appDirectory, 'dist'),
-    publicPath: '/',
-    filename: 'bundle.web.js',
+    path: path.resolve(__dirname, "dist"),
+    filename: "bundle.js"
   },
   resolve: {
-    extensions: ['.web.tsx', '.web.ts', '.tsx', '.ts', '.web.js', '.js', '.jsx', '.web.jsx'],
-    alias: {
-      'react-native$': 'react-native-web',
-      // Leurre pour le Keychain sur le Web
-      'react-native-keychain': path.resolve(appDirectory, 'keychain.mock.js'),
-    },
     fallback: {
-      crypto: require.resolve('crypto-browserify'),
-      stream: require.resolve('stream-browserify'),
-      vm: require.resolve('vm-browserify'),
-      buffer: require.resolve('buffer/'),
-      process: require.resolve('process/browser'),
-      path: require.resolve('path-browserify'),
-      fs: false
+      "crypto": require.resolve("crypto-browserify"),
+      "stream": require.resolve("stream-browserify"),
+      "assert": require.resolve("assert"),
+      "zlib": require.resolve("browserify-zlib"),
+      "util": require.resolve("util/"),
+      "buffer": require.resolve("buffer/"),
+      "process": require.resolve("process/browser"),
+      "path": require.resolve("path-browserify")
     }
   },
-  module: {
-    rules: [
-      babelLoaderConfiguration,
-      {
-        test: /\.(jpg|png|woff|woff2|eot|ttf|svg)$/,
-        type: 'asset/resource'
-      },
-      {
-        // Force le chargement des polices d'icônes
-        test: /\.ttf$/,
-        loader: 'url-loader', 
-        include: path.resolve(__dirname, 'node_modules/react-native-vector-icons'),
-      },
-      {
-        // Gère les fichiers .mjs de WalletConnect
-        test: /\.mjs$/,
-        include: /node_modules/,
-        type: 'javascript/auto',
-        resolve: {
-            fullySpecified: false
-        }
-      }
-    ],
-  },
   plugins: [
-    new HtmlWebpackPlugin({
-      template: path.join(appDirectory, 'public/index.html'),
-    }),
     new webpack.ProvidePlugin({
-      process: 'process/browser',
-      Buffer: ['buffer', 'Buffer'],
-    }),
-    new webpack.DefinePlugin({
-      __DEV__: JSON.stringify(false),
-      global: 'globalThis'
+      Buffer: ["buffer", "Buffer"],
+      process: "process/browser"
     })
-  ],
+  ]
 };
-
-
