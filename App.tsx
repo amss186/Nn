@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { Platform } from 'react-native';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Provider as PaperProvider } from 'react-native-paper';
-import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
+
+// i18n init
+import './src/i18n/index';
 
 import OnboardingScreen from './src/components/OnboardingScreen.jsx';
 import BackupScreen from './src/components/BackupScreen.jsx';
@@ -13,9 +16,9 @@ import DashboardScreen from './src/components/DashboardScreen.jsx';
 import SendScreen from './src/components/SendScreen.jsx';
 import ReceiveScreen from './src/components/ReceiveScreen.jsx';
 import ScanScreen from './src/screens/ScanScreen';
+import SettingsScreen from './src/screens/SettingsScreen.tsx';
 import WalletConnectModal from './src/components/WalletConnectModal';
 import AuthScreen from './src/screens/AuthScreen';
-
 import useWalletStore from './src/store/walletStore';
 import {
   observeAuthState,
@@ -24,29 +27,37 @@ import {
   linkWalletAddressToUser
 } from './src/services/authService';
 import './src/firebaseConfig';
+import { DarkTheme, LightTheme } from './src/theme';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const navRef = useRef<NavigationContainerRef<any>>(null);
 
-  const isWalletCreated    = useWalletStore((s) => s.isWalletCreated);
-  const isWalletUnlocked   = useWalletStore((s) => s.isWalletUnlocked);
-  const needsBackup        = useWalletStore((s) => s.needsBackup);
-  const hasBackedUp        = useWalletStore((s) => s.hasBackedUp);
-  const walletAddress      = useWalletStore((s) => s.address);
-  const checkStorage       = useWalletStore((s) => s.actions.checkStorage);
-  const walletStore        = useWalletStore();
+  const isWalletCreated  = useWalletStore((s) => s.isWalletCreated);
+  const isWalletUnlocked = useWalletStore((s) => s.isWalletUnlocked);
+  const needsBackup      = useWalletStore((s) => s.needsBackup);
+  const hasBackedUp      = useWalletStore((s) => s.hasBackedUp);
+  const walletAddress    = useWalletStore((s) => s.address);
+  const checkStorage     = useWalletStore((s) => s.actions.checkStorage);
+  const themeMode        = useWalletStore((s) => s.themeMode);
+  const walletStore      = useWalletStore();
 
   const [firebaseUser, setFirebaseUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading]   = useState(true);
 
-  // 1. Vérifier l'existence locale du portefeuille
+  // Initial storage check
   useEffect(() => {
     checkStorage();
   }, [checkStorage]);
 
-  // 2. Gérer le retour Google redirect (web)
+  // Preferences + auto-lock watcher
+  useEffect(() => {
+    walletStore.actions.initializePreferences?.();
+    walletStore.actions.applyAutoLockWatcher?.();
+  }, []);
+
+  // Handle Google redirect (web)
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       handleRedirectResultOnLoad()
@@ -54,41 +65,26 @@ export default function App() {
           if (user) {
             Toast.show({
               type: 'success',
-              text1: 'Connecté avec Google',
-              text2: `Bienvenue ${user.email}`,
+              text1: 'Connecté',
+              text2: user.email || ''
             });
-
-            if (walletStore.isWalletCreated && walletAddress) {
-              linkWalletAddressToUser(user.uid, walletAddress)
-                .then(() => {
-                  Toast.show({
-                    type: 'success',
-                    text1: 'Portefeuille lié',
-                    text2: 'Adresse liée à votre compte.',
-                  });
-                })
-                .catch((err) => console.error('Link wallet after redirect error:', err));
-            } else {
-              Toast.show({
-                type: 'info',
-                text1: 'Aucun portefeuille trouvé',
-                text2: 'Crée ou importe ton portefeuille.',
-              });
+            const addr = walletStore.address;
+            if (walletStore.isWalletCreated && addr) {
+              linkWalletAddressToUser(user.uid, addr).catch(() => {});
             }
           }
         })
-        .catch((err) => {
-          console.error('Redirect result error:', err);
+        .catch(() => {
           Toast.show({
             type: 'error',
             text1: 'Erreur',
-            text2: 'Impossible de finaliser la connexion Google.',
+            text2: 'Connexion Google impossible'
           });
         });
     }
   }, []);
 
-  // 3. Observer Firebase (web)
+  // Observe Firebase auth on web
   useEffect(() => {
     if (Platform.OS === 'web') {
       const unsub = observeAuthState((user) => {
@@ -101,7 +97,7 @@ export default function App() {
     }
   }, []);
 
-  // 4. Redirection centralisée quand état change
+  // Central redirections
   useEffect(() => {
     if (authLoading) return;
 
@@ -109,12 +105,11 @@ export default function App() {
 
     if (needsAuth) {
       if (navRef.current?.getCurrentRoute()?.name !== 'Auth') {
-        navRef.current?.navigate('Auth');
+        navRef.current?.reset({ index: 0, routes: [{ name: 'Auth' }] });
       }
       return;
     }
 
-    // Auth OK : choisir destination
     if (!isWalletCreated) {
       if (navRef.current?.getCurrentRoute()?.name !== 'Onboarding') {
         navRef.current?.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
@@ -136,7 +131,6 @@ export default function App() {
       return;
     }
 
-    // Tout bon -> Dashboard
     if (navRef.current?.getCurrentRoute()?.name !== 'Dashboard') {
       navRef.current?.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
     }
@@ -150,26 +144,33 @@ export default function App() {
     isWalletUnlocked
   ]);
 
-  if (authLoading && Platform.OS === 'web') {
-    return null;
-  }
+  if (authLoading && Platform.OS === 'web') return null;
 
-  const needsAuth = Platform.OS === 'web' && (!firebaseUser || !firebaseUser.emailVerified);
+  const paperTheme =
+    themeMode === 'dark'
+      ? DarkTheme
+      : themeMode === 'light'
+        ? LightTheme
+        : (Platform.OS === 'web'
+            ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? DarkTheme
+              : LightTheme)
+            : DarkTheme);
 
   return (
-    <PaperProvider>
+    <PaperProvider theme={paperTheme}>
       <NavigationContainer ref={navRef}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {/* On garde toutes les routes pour les navigations programmatiques */}
           <Stack.Screen name="Auth" component={AuthScreen} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           <Stack.Screen name="Backup" component={BackupScreen} />
           <Stack.Screen name="BackupVerify" component={BackupVerifyScreen} />
           <Stack.Screen name="Locked" component={LockedScreen} />
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          <Stack.Screen name="Dashboard" component={DashboardScreen} />
           <Stack.Screen name="Send" component={SendScreen} />
           <Stack.Screen name="Receive" component={ReceiveScreen} />
           <Stack.Screen name="Scan" component={ScanScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
         <WalletConnectModal />
         <Toast />
