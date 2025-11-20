@@ -3,8 +3,6 @@ import { ethers } from 'ethers';
 import * as Keychain from 'react-native-keychain';
 import { Alchemy } from 'alchemy-sdk';
 import { Platform } from 'react-native';
-
-// Secure storage utilities (Phase 2)
 import {
   encryptMnemonic,
   decryptMnemonic,
@@ -13,24 +11,10 @@ import {
   clearEncryptedMnemonic,
 } from '../utils/secureStorage';
 
-// DEMO legacy web storage fallback (only used if encryption fails or password absent)
 const webStorage = {
-  getItem: (key) => {
-    if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem(key);
-    }
-    return null;
-  },
-  setItem: (key, value) => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(key, value);
-    }
-  },
-  removeItem: (key) => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(key);
-    }
-  },
+  getItem: (k) => (typeof localStorage !== 'undefined' ? localStorage.getItem(k) : null),
+  setItem: (k, v) => { if (typeof localStorage !== 'undefined') localStorage.setItem(k, v); },
+  removeItem: (k) => { if (typeof localStorage !== 'undefined') localStorage.removeItem(k); },
 };
 
 const SUPPORTED_NETWORKS = [
@@ -53,31 +37,27 @@ const SUPPORTED_NETWORKS = [
 ];
 
 const useWalletStore = create((set, get) => ({
-  // Core state
-  mnemonic: null,                 // Plain mnemonic only held when unlocked (DO NOT persist)
-  encryptedMnemonicPayload: null, // Chiffrement PBKDF2 + AES-GCM (web)
+  mnemonic: null,
+  encryptedMnemonicPayload: null,
   address: null,
   isWalletCreated: false,
   isWalletUnlocked: false,
-  needsBackup: false,             // If true, user must verify backup flow
-  hasBackedUp: false,             // Phase 3 flag
-  securityLevel: 'weak',          // 'weak' | 'strong'
-  tempPlainMnemonic: null,        // Used only for backup verification then cleared
+  needsBackup: false,
+  hasBackedUp: false,
+  securityLevel: 'weak',
+  tempPlainMnemonic: null,
   balance: '0',
   currentScreen: 'dashboard',
   isSending: false,
   sendError: null,
   transactions: [],
   tokenBalances: [],
-  customTokens: [], // user-added tokens { address, symbol, decimals }
+  customTokens: [],
   assetToSend: null,
   currentNetwork: SUPPORTED_NETWORKS[0],
-
-  // WalletConnect state
   walletConnectRequest: null,
 
   actions: {
-    // Vérifie stockage existant (web/natif)
     checkStorage: async () => {
       try {
         let walletExists = false;
@@ -87,19 +67,14 @@ const useWalletStore = create((set, get) => ({
 
         if (Platform.OS === 'web') {
           const payload = loadEncryptedMnemonic();
-            encryptedPayload = payload;
+          encryptedPayload = payload;
           const legacyMnemonic = webStorage.getItem('wallet_mnemonic');
           if (payload || legacyMnemonic) walletExists = true;
-
-          // backup flags
-          const needsBackupStored = localStorage.getItem('wallet_needsBackup');
-          needsBackup = needsBackupStored === 'true';
-          const backedUpStored = localStorage.getItem('wallet_hasBackedUp');
-          hasBackedUp = backedUpStored === 'true';
+          needsBackup = localStorage.getItem('wallet_needsBackup') === 'true';
+          hasBackedUp = localStorage.getItem('wallet_hasBackedUp') === 'true';
         } else {
           const credentials = await Keychain.getGenericPassword();
           walletExists = !!credentials;
-          // For native we assume user must backup if newly created
           needsBackup = walletExists ? true : false;
         }
 
@@ -109,18 +84,12 @@ const useWalletStore = create((set, get) => ({
           hasBackedUp,
           encryptedMnemonicPayload: encryptedPayload,
         });
-
-        // Auto-unlock in web if encrypted payload exists & backup done
-        if (Platform.OS === 'web' && encryptedPayload && !needsBackup) {
-          // Cannot decrypt without password; require user to unlock explicitly.
-        }
-      } catch (error) {
-        console.log('checkStorage error:', error);
+      } catch (e) {
+        console.log('checkStorage error', e);
         set({ isWalletCreated: false });
       }
     },
 
-    // Crée un nouveau portefeuille
     createWallet: async (password = '') => {
       const wallet = ethers.Wallet.createRandom();
       const phrase = wallet.mnemonic.phrase;
@@ -132,15 +101,14 @@ const useWalletStore = create((set, get) => ({
             storeEncryptedMnemonic(payload);
             set({ encryptedMnemonicPayload: payload, securityLevel: 'strong' });
           } else {
-            // Fallback weak storage if no password
             webStorage.setItem('wallet_mnemonic', phrase);
             set({ securityLevel: 'weak' });
           }
           localStorage.setItem('wallet_needsBackup', 'true');
           localStorage.setItem('wallet_hasBackedUp', 'false');
         } catch (e) {
-          console.warn('Encryption failed, fallback weak storage:', e);
-          webStorage.setItem('wallet_mnemonic', phrase);
+          console.warn('Encryption failed fallback', e);
+            webStorage.setItem('wallet_mnemonic', phrase);
           localStorage.setItem('wallet_needsBackup', 'true');
           localStorage.setItem('wallet_hasBackedUp', 'false');
           set({ securityLevel: 'weak' });
@@ -153,21 +121,19 @@ const useWalletStore = create((set, get) => ({
 
       set({
         mnemonic: phrase,
-        tempPlainMnemonic: phrase, // for backup verification
+        tempPlainMnemonic: phrase,
         address: wallet.address,
         isWalletCreated: true,
         isWalletUnlocked: false,
         needsBackup: true,
         hasBackedUp: false,
       });
-
       return phrase;
     },
 
-    // Import mnemonic existante
     importWalletFromMnemonic: async (mnemonic, passwordForLocalEncryption = '') => {
       try {
-        const wallet = ethers.Wallet.fromPhrase(mnemonic.trim());
+        const wallet = ethers.Wallet.fromMnemonic(mnemonic.trim());
         const address = wallet.address;
 
         if (Platform.OS === 'web') {
@@ -180,11 +146,10 @@ const useWalletStore = create((set, get) => ({
               webStorage.setItem('wallet_mnemonic', mnemonic.trim());
               set({ securityLevel: 'weak' });
             }
-            // Imported wallet: assume user already has mnemonic => no backup required
             localStorage.setItem('wallet_needsBackup', 'false');
             localStorage.setItem('wallet_hasBackedUp', 'true');
           } catch (e) {
-            console.warn('Encryption failed fallback weak storage:', e);
+            console.warn('Encryption failed fallback', e);
             webStorage.setItem('wallet_mnemonic', mnemonic.trim());
             localStorage.setItem('wallet_needsBackup', 'false');
             localStorage.setItem('wallet_hasBackedUp', 'true');
@@ -198,22 +163,20 @@ const useWalletStore = create((set, get) => ({
 
         set({
           mnemonic: mnemonic.trim(),
-          tempPlainMnemonic: null, // not needed for import
+          tempPlainMnemonic: null,
           address,
           isWalletCreated: true,
           isWalletUnlocked: true,
           needsBackup: false,
           hasBackedUp: true,
         });
-
         return address;
-      } catch (error) {
-        console.log('importWalletFromMnemonic error:', error);
+      } catch (e) {
+        console.log('importWalletFromMnemonic error', e);
         throw new Error('Mnemonic invalide');
       }
     },
 
-    // Vérifie sauvegarde (Backup phase)
     verifyBackup: () => {
       if (Platform.OS === 'web') {
         localStorage.setItem('wallet_needsBackup', 'false');
@@ -228,7 +191,6 @@ const useWalletStore = create((set, get) => ({
       });
     },
 
-    // Déverrouille (web password ou natif biométrie)
     unlockWallet: async (password = '') => {
       try {
         if (Platform.OS === 'web') {
@@ -236,62 +198,36 @@ const useWalletStore = create((set, get) => ({
           const legacyMnemonic = webStorage.getItem('wallet_mnemonic');
 
           if (payload) {
-            // Decrypt using password
             const phrase = await decryptMnemonic(payload, password);
-            const wallet = ethers.Wallet.fromPhrase(phrase);
-            set({
-              mnemonic: phrase,
-              address: wallet.address,
-              isWalletUnlocked: true,
-            });
+            const wallet = ethers.Wallet.fromMnemonic(phrase);
+            set({ mnemonic: phrase, address: wallet.address, isWalletUnlocked: true });
             return true;
           }
-
           if (legacyMnemonic) {
-            // Weak storage fallback
-            const wallet = ethers.Wallet.fromPhrase(legacyMnemonic);
-            set({
-              mnemonic: legacyMnemonic,
-              address: wallet.address,
-              isWalletUnlocked: true,
-            });
+            const wallet = ethers.Wallet.fromMnemonic(legacyMnemonic);
+            set({ mnemonic: legacyMnemonic, address: wallet.address, isWalletUnlocked: true });
             return true;
           }
-
           throw new Error('Aucun portefeuille trouvé');
         }
 
-        // Native: Keychain + biométrie
         const credentials = await Keychain.getGenericPassword({
           authenticationPrompt: { title: 'Déverrouiller le portefeuille' },
         });
-
-        if (!credentials) {
-          throw new Error('Échec de l’authentification ou annulée');
-        }
-
-        const wallet = ethers.Wallet.fromPhrase(credentials.password);
-        set({
-          mnemonic: credentials.password,
-          address: wallet.address,
-          isWalletUnlocked: true,
-        });
+        if (!credentials) throw new Error('Authentification annulée');
+        const wallet = ethers.Wallet.fromMnemonic(credentials.password);
+        set({ mnemonic: credentials.password, address: wallet.address, isWalletUnlocked: true });
         return true;
-      } catch (error) {
-        console.log('Unlock failed:', error);
-        throw error;
+      } catch (e) {
+        console.log('unlockWallet error', e);
+        throw e;
       }
     },
 
-    lockWallet: () => {
-      set({
-        mnemonic: null,
-        isWalletUnlocked: false,
-      });
-    },
+    lockWallet: () => set({ mnemonic: null, isWalletUnlocked: false }),
 
     wipeWallet: async () => {
-      clearEncryptedMnemonic(); // clear encrypted payload web
+      clearEncryptedMnemonic();
       await Keychain.resetGenericPassword();
       if (Platform.OS === 'web') {
         localStorage.removeItem('wallet_needsBackup');
@@ -319,44 +255,45 @@ const useWalletStore = create((set, get) => ({
       try {
         const { address, currentNetwork } = get();
         if (!address) return;
-
-        const settings = {
-          apiKey: '6E1MABBp0KS-gBCc5zXk7',
-          network: currentNetwork.alchemyNetwork,
-        };
+        const settings = { apiKey: '6E1MABBp0KS-gBCc5zXk7', network: currentNetwork.alchemyNetwork };
         const alchemy = new Alchemy(settings);
 
         const balanceWei = await alchemy.core.getBalance(address);
         const balanceEth = ethers.utils.formatEther(balanceWei);
 
         const tokenBalancesResponse = await alchemy.core.getTokenBalances(address);
-
         const tokensWithBalance = tokenBalancesResponse.tokenBalances.filter(
-          (token) => token.tokenBalance !== '0' && token.tokenBalance !== null,
+          (t) => t.tokenBalance !== '0' && t.tokenBalance,
         );
 
-        const tokenMetadataPromises = tokensWithBalance.map((token) =>
-          alchemy.core.getTokenMetadata(token.contractAddress),
+        const metadataPromises = tokensWithBalance.map((t) =>
+          alchemy.core.getTokenMetadata(t.contractAddress),
         );
-        const tokenMetadataList = await Promise.all(tokenMetadataPromises);
+        const metadataList = await Promise.all(metadataPromises);
 
         const finalTokenList = tokensWithBalance
-          .map((token, index) => {
-            const metadata = tokenMetadataList[index];
-            if (!metadata.symbol) return null;
-            const balance =
-              parseInt(token.tokenBalance, 16) / Math.pow(10, metadata.decimals || 18);
+          .map((t, i) => {
+            const meta = metadataList[i];
+            if (!meta.symbol) return null;
+            const rawStr = t.tokenBalance;
+            let raw;
+            if (rawStr.startsWith('0x')) {
+              raw = parseInt(rawStr, 16);
+            } else {
+              raw = Number(rawStr);
+            }
+            const decimals = meta.decimals || 18;
+            const bal = raw / Math.pow(10, decimals);
             return {
-              symbol: metadata.symbol,
-              balance: balance.toFixed(4),
-              contractAddress: token.contractAddress,
-              decimals: metadata.decimals || 18,
-              logo: metadata.logo,
+              symbol: meta.symbol,
+              balance: bal.toFixed(4),
+              contractAddress: t.contractAddress,
+              decimals,
+              logo: meta.logo,
             };
           })
-          .filter((token) => token !== null);
+          .filter(Boolean);
 
-        // Transactions
         const sentTransfers = await alchemy.core.getAssetTransfers({
           fromBlock: '0x0',
           toBlock: 'latest',
@@ -377,159 +314,113 @@ const useWalletStore = create((set, get) => ({
           maxCount: 20,
         });
 
-        const allTransfers = [...sentTransfers.transfers, ...receivedTransfers.transfers];
-        allTransfers.sort((a, b) => {
-          const dateA = new Date(a.metadata.blockTimestamp);
-          const dateB = new Date(b.metadata.blockTimestamp);
-          return dateB - dateA;
-        });
+        const allTransfers = [...sentTransfers.transfers, ...receivedTransfers.transfers].sort(
+          (a, b) => new Date(b.metadata.blockTimestamp) - new Date(a.metadata.blockTimestamp),
+        );
 
         set({
           balance: balanceEth,
           transactions: allTransfers.slice(0, 40),
           tokenBalances: finalTokenList,
         });
-      } catch (error) {
-        console.log('Failed to fetch data:', error);
+      } catch (e) {
+        console.log('fetchData error', e);
         set({ balance: '0', transactions: [], tokenBalances: [] });
       }
     },
 
-    setScreen: (screenName, asset = null) => {
-      set({
-        currentScreen: screenName,
-        assetToSend: asset,
-      });
-    },
+    setScreen: (screenName, asset = null) => set({ currentScreen: screenName, assetToSend: asset }),
 
-    switchNetwork: (network) => {
+    switchNetwork: (network) =>
       set({
         currentNetwork: network,
         balance: '0',
         tokenBalances: [],
         transactions: [],
-      });
-    },
+      }),
 
     sendTransaction: async (toAddress, amount) => {
       set({ isSending: true, sendError: null });
       try {
-        const { mnemonic, assetToSend, currentNetwork } = get();
-        if (!mnemonic) {
-          throw new Error('Mnémonique non disponible. Déverrouille le portefeuille.');
-        }
+        const { mnemonic, assetToSend, currentNetwork, hasBackedUp } = get();
+        if (!mnemonic) throw new Error('Déverrouille le portefeuille.');
+        if (!hasBackedUp) throw new Error('Fais le backup avant d’envoyer des fonds.');
 
         const provider = new ethers.providers.JsonRpcProvider(currentNetwork.rpcUrl);
-        const wallet = ethers.Wallet.fromPhrase(mnemonic);
+        const wallet = ethers.Wallet.fromMnemonic(mnemonic);
         const connectedWallet = wallet.connect(provider);
 
-        if (!ethers.utils.isAddress(toAddress)) {
-          throw new Error('Adresse destinataire invalide.');
-        }
+        if (!ethers.utils.isAddress(toAddress)) throw new Error('Adresse invalide.');
 
         if (assetToSend && assetToSend.contractAddress) {
           const tokenAbi = ['function transfer(address to, uint256 amount)'];
-          const tokenContract = new ethers.Contract(
-            assetToSend.contractAddress,
-            tokenAbi,
-            connectedWallet,
-          );
-            const amountToSend = ethers.utils.parseUnits(amount, assetToSend.decimals);
+          const tokenContract = new ethers.Contract(assetToSend.contractAddress, tokenAbi, connectedWallet);
+          const amountToSend = ethers.utils.parseUnits(amount, assetToSend.decimals);
           const tx = await tokenContract.transfer(toAddress, amountToSend);
           await tx.wait();
         } else {
           const txValue = ethers.utils.parseEther(amount);
-          const tx = { to: toAddress, value: txValue };
-          const txResponse = await connectedWallet.sendTransaction(tx);
+          const txResponse = await connectedWallet.sendTransaction({ to: toAddress, value: txValue });
           await txResponse.wait();
         }
 
         await get().actions.fetchData();
         get().actions.setScreen('dashboard');
-      } catch (error) {
-        console.log('sendTransaction error:', error);
-        set({ sendError: error.message });
+      } catch (e) {
+        console.log('sendTransaction error', e);
+        set({ sendError: e.message });
       } finally {
         set({ isSending: false });
       }
     },
 
-    // ERC-20 custom token management (Phase 4 minimal)
     addCustomToken: (token) => {
       const { customTokens } = get();
-      if (
-        customTokens.find(
-          (t) => t.address.toLowerCase() === token.address.toLowerCase(),
-        )
-      ) {
-        return;
-      }
+      if (customTokens.find((t) => t.address.toLowerCase() === token.address.toLowerCase())) return;
       set({ customTokens: [...customTokens, token] });
     },
 
-    // WalletConnect existing actions preserved:
-
-    setWalletConnectRequest: (request) => {
-      set({ walletConnectRequest: request });
-    },
-
-    clearWalletConnectRequest: () => {
-      set({ walletConnectRequest: null });
-    },
+    setWalletConnectRequest: (r) => set({ walletConnectRequest: r }),
+    clearWalletConnectRequest: () => set({ walletConnectRequest: null }),
 
     approveSession: async () => {
       const { walletConnectRequest, address, currentNetwork } = get();
-      if (!walletConnectRequest || walletConnectRequest.type !== 'session_proposal') {
-        console.error('No session proposal to approve');
-        return;
-      }
+      if (!walletConnectRequest || walletConnectRequest.type !== 'session_proposal') return;
       try {
         const WalletConnectService = (await import('../services/WalletConnectService')).default;
         const wcService = WalletConnectService.getInstance();
         const accounts = [`eip155:${currentNetwork.chainId}:${address}`];
-        await wcService.approveSession(
-          walletConnectRequest.id,
-          accounts,
-          currentNetwork.chainId,
-        );
+        await wcService.approveSession(walletConnectRequest.id, accounts, currentNetwork.chainId);
         set({ walletConnectRequest: null });
-      } catch (error) {
-        console.error('Failed to approve session:', error);
-        throw error;
+      } catch (e) {
+        console.error('approveSession error', e);
+        throw e;
       }
     },
 
     rejectSession: async () => {
       const { walletConnectRequest } = get();
-      if (!walletConnectRequest || walletConnectRequest.type !== 'session_proposal') {
-        console.error('No session proposal to reject');
-        return;
-      }
+      if (!walletConnectRequest || walletConnectRequest.type !== 'session_proposal') return;
       try {
         const WalletConnectService = (await import('../services/WalletConnectService')).default;
         const wcService = WalletConnectService.getInstance();
         await wcService.rejectSession(walletConnectRequest.id);
         set({ walletConnectRequest: null });
-      } catch (error) {
-        console.error('Failed to reject session:', error);
-        throw error;
+      } catch (e) {
+        console.error('rejectSession error', e);
+        throw e;
       }
     },
 
     approveRequest: async () => {
       const { walletConnectRequest, mnemonic, currentNetwork } = get();
-      if (!walletConnectRequest || walletConnectRequest.type !== 'session_request') {
-        console.error('No session request to approve');
-        return;
-      }
-      if (!mnemonic) {
-        throw new Error('Wallet not unlocked');
-      }
+      if (!walletConnectRequest || walletConnectRequest.type !== 'session_request') return;
+      if (!mnemonic) throw new Error('Wallet non déverrouillé');
       try {
         const WalletConnectService = (await import('../services/WalletConnectService')).default;
         const wcService = WalletConnectService.getInstance();
 
-        const wallet = ethers.Wallet.fromPhrase(mnemonic);
+        const wallet = ethers.Wallet.fromMnemonic(mnemonic);
         const provider = new ethers.providers.JsonRpcProvider(currentNetwork.rpcUrl);
         const connectedWallet = wallet.connect(provider);
 
@@ -576,7 +467,7 @@ const useWalletStore = create((set, get) => ({
             break;
           }
           default:
-            throw new Error(`Unsupported method: ${request.method}`);
+            throw new Error(`Méthode non supportée: ${request.method}`);
         }
 
         await wcService.respondRequest(topic, id, result);
@@ -585,26 +476,23 @@ const useWalletStore = create((set, get) => ({
         if (request.method === 'eth_sendTransaction') {
           await get().actions.fetchData();
         }
-      } catch (error) {
-        console.error('Failed to approve request:', error);
-        throw error;
+      } catch (e) {
+        console.error('approveRequest error', e);
+        throw e;
       }
     },
 
     rejectRequest: async () => {
       const { walletConnectRequest } = get();
-      if (!walletConnectRequest || walletConnectRequest.type !== 'session_request') {
-        console.error('No session request to reject');
-        return;
-      }
+      if (!walletConnectRequest || walletConnectRequest.type !== 'session_request') return;
       try {
         const WalletConnectService = (await import('../services/WalletConnectService')).default;
         const wcService = WalletConnectService.getInstance();
         await wcService.rejectRequest(walletConnectRequest.topic, walletConnectRequest.id);
         set({ walletConnectRequest: null });
-      } catch (error) {
-        console.error('Failed to reject request:', error);
-        throw error;
+      } catch (e) {
+        console.error('rejectRequest error', e);
+        throw e;
       }
     },
   },
