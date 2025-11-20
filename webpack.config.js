@@ -1,9 +1,9 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 const appDirectory = path.resolve(__dirname);
 
-// Liste des modules à compiler (Expo, Vector Icons, etc.)
 const compileNodeModules = [
   'react-native',
   '@react-native',
@@ -19,6 +19,7 @@ const compileNodeModules = [
   'react-native-screens',
   '@react-navigation',
   'alchemy-sdk',
+  'firebase',
 ];
 
 const babelLoaderConfiguration = {
@@ -33,11 +34,15 @@ const babelLoaderConfiguration = {
       cacheDirectory: true,
       babelrc: false,
       configFile: false,
-      // C'EST ICI LA MAGIE : On utilise le preset officiel React Native
-      // Il contient déjà "export-namespace-from", "class-properties", etc.
-      presets: ['module:metro-react-native-babel-preset'],
+      presets: [
+        ['module:metro-react-native-babel-preset'],
+      ],
       plugins: [
         ['react-native-web', { commonjs: true }],
+        ['@babel/plugin-proposal-export-namespace-from'],
+        ['@babel/plugin-proposal-class-properties', { loose: true }],
+        ['@babel/plugin-proposal-private-methods', { loose: true }],
+        ['@babel/plugin-proposal-private-property-in-object', { loose: true }]
       ],
     },
   },
@@ -58,6 +63,14 @@ module.exports = {
       'react-native$': 'react-native-web',
       'react-native-keychain': path.resolve(appDirectory, 'keychain.mock.js'),
     },
+    // LA SOLUTION AUX ERREURS CRYPTO :
+    fallback: {
+      "crypto": require.resolve("crypto-browserify"),
+      "stream": require.resolve("stream-browserify"),
+      "vm": require.resolve("vm-browserify"),
+      "buffer": require.resolve("buffer/"),
+      "process": require.resolve("process/browser"),
+    }
   },
   module: {
     rules: [
@@ -76,6 +89,11 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: path.join(appDirectory, 'public/index.html'),
+    }),
+    // Injecte les variables globales pour le web
+    new webpack.ProvidePlugin({
+      process: 'process/browser',
+      Buffer: ['buffer', 'Buffer'],
     }),
   ],
 };
