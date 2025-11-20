@@ -1,0 +1,43 @@
+{
+  "auth": {
+    "signup_success": "Account created. Verification email sent.",
+    "login_success": "Welcome {{email}}",
+    "email_unverified": "Email not verified yet.",
+    "reset_sent": "If the account exists, a reset link was sent"
+  },
+  "wallet": {
+    "created": "Wallet created successfully",
+    "imported": "Wallet imported successfully",
+    "unlocked": "Wallet unlocked",
+    "locked": "Wallet locked",
+    "backup_needed": "Please back up your recovery phrase",
+    "send_disabled_backup": "Backup required before sending",
+    "send_disabled_locked": "Unlock your wallet first",
+    "invalid_mnemonic": "Invalid mnemonic",
+    "password_changed": "Password changed",
+    "encryption_migrated": "Encryption upgraded"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "language": "Language",
+    "appearance": "Appearance",
+    "security": "Security",
+    "about": "About",
+    "select_language": "Select Language",
+    "auto_detect": "Auto detect",
+    "theme_mode": "Theme mode",
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System",
+    "auto_lock": "Auto-lock timeout",
+    "password_change": "Change Password",
+    "old_password": "Old Password",
+    "new_password": "New Password",
+    "confirm_password": "Confirm Password",
+    "encryption_status": "Encryption Status",
+    "migrate_encryption": "Upgrade Encryption",
+    "copy_address": "Copy Address",
+    "backup_now": "Backup Now"
+  }
+}
