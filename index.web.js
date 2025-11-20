@@ -1,10 +1,10 @@
 import 'react-native-get-random-values';
+import 'crypto-browserify';
 import { AppRegistry } from 'react-native';
 import App from './App';
 import { name as appName } from './app.json';
 import iconFont from 'react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf';
 
-// Injection font MaterialCommunityIcons
 const iconFontStyles = `@font-face {
   src: url(${iconFont});
   font-family: MaterialCommunityIcons;
@@ -12,11 +12,7 @@ const iconFontStyles = `@font-face {
 
 const style = document.createElement('style');
 style.type = 'text/css';
-if (style.styleSheet) {
-  style.styleSheet.cssText = iconFontStyles;
-} else {
-  style.appendChild(document.createTextNode(iconFontStyles));
-}
+style.appendChild(document.createTextNode(iconFontStyles));
 document.head.appendChild(style);
 
 AppRegistry.registerComponent(appName, () => App);
